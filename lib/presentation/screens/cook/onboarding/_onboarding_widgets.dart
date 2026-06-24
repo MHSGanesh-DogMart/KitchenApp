@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../../../core/constants/app_colors.dart';
-import '../../auth/_auth_widgets.dart';
 import '../../discover/_discover_widgets.dart';
 
 /// ────────────────────────────────────────────────────────────────
@@ -48,23 +48,28 @@ class OnboardingScaffold extends StatelessWidget {
       backgroundColor: AppColors.background,
       body: Stack(
         children: [
-          Column(
-            children: [
-              OnboardingHeader(
-                step: step,
-                totalSteps: totalSteps,
-                kicker: kicker,
-                title: title,
-                subtitle: subtitle,
-                gradient: gradient,
-              ),
-              Expanded(
-                child: ListView(
-                  padding: EdgeInsets.fromLTRB(20.w, 20.h, 20.w, 120.h),
-                  children: body,
+          Positioned.fill(
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                SliverToBoxAdapter(
+                  child: OnboardingHeader(
+                    step: step,
+                    totalSteps: totalSteps,
+                    kicker: kicker,
+                    title: title,
+                    subtitle: subtitle,
+                    gradient: gradient,
+                  ),
                 ),
-              ),
-            ],
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(20.w, 20.h, 20.w, 130.h),
+                  sliver: SliverList(
+                    delegate: SliverChildListDelegate(body),
+                  ),
+                ),
+              ],
+            ),
           ),
           Positioned(
             left: 0,
@@ -465,6 +470,7 @@ class PremiumField extends StatefulWidget {
     this.readOnly = false,
     this.onTap,
     this.suffixIcon,
+    this.required = false,
   });
   final TextEditingController controller;
   final String label;
@@ -476,6 +482,7 @@ class PremiumField extends StatefulWidget {
   final bool readOnly;
   final VoidCallback? onTap;
   final IconData? suffixIcon;
+  final bool required;
   @override
   State<PremiumField> createState() => _PremiumFieldState();
 }
@@ -511,8 +518,17 @@ class _PremiumFieldState extends State<PremiumField> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  widget.label.toUpperCase(),
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(text: widget.label.toUpperCase()),
+                      if (widget.required)
+                        const TextSpan(
+                          text: ' *',
+                          style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                        ),
+                    ],
+                  ),
                   style: GoogleFonts.spaceGrotesk(
                     fontSize: 9.5.sp,
                     fontWeight: FontWeight.w700,
@@ -589,6 +605,8 @@ class UploadTile extends StatelessWidget {
     required this.onTap,
     this.style = UploadStyle.doc,
     this.required = false,
+    this.imageUrl,
+    this.onRemove,
   });
   final String title;
   final String helper;
@@ -597,6 +615,8 @@ class UploadTile extends StatelessWidget {
   final VoidCallback onTap;
   final UploadStyle style;
   final bool required;
+  final String? imageUrl;
+  final VoidCallback? onRemove;
 
   @override
   Widget build(BuildContext context) {
@@ -611,6 +631,7 @@ class UploadTile extends StatelessWidget {
   }
 
   Widget _hero() {
+    final showImage = uploaded && imageUrl != null && imageUrl!.isNotEmpty;
     return Material(
       color: Colors.transparent,
       child: Ink(
@@ -654,35 +675,46 @@ class UploadTile extends StatelessWidget {
                     ],
                   ),
                   alignment: Alignment.center,
-                  child: Icon(
-                    uploaded ? Icons.check_rounded : icon,
-                    color: uploaded ? Colors.white : AppColors.primary,
-                    size: 30.sp,
-                  ),
+                  child: showImage
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(32.r),
+                          child: CachedNetworkImage(
+                            imageUrl: imageUrl!,
+                            width: 64.w,
+                            height: 64.w,
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) => const CircularProgressIndicator(strokeWidth: 2),
+                            errorWidget: (context, url, error) => const Icon(Icons.error_outline_rounded, color: Colors.red),
+                          ),
+                        )
+                      : Icon(
+                          uploaded ? Icons.check_rounded : icon,
+                          color: uploaded ? Colors.white : AppColors.primary,
+                          size: 30.sp,
+                        ),
                 ),
                 SizedBox(width: 16.w),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              uploaded ? '$title added' : title,
-                              style: GoogleFonts.spaceGrotesk(
-                                fontSize: 16.sp,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.ink,
-                                letterSpacing: -.2,
+                      Text.rich(
+                        TextSpan(
+                          children: [
+                            TextSpan(text: uploaded ? '$title added' : title),
+                            if (required)
+                              const TextSpan(
+                                text: ' *',
+                                style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
                               ),
-                            ),
-                          ),
-                          if (required && !uploaded) ...[
-                            SizedBox(width: 8.w),
-                            _RequiredDot(),
                           ],
-                        ],
+                        ),
+                        style: GoogleFonts.spaceGrotesk(
+                          fontSize: 16.sp,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.ink,
+                          letterSpacing: -.2,
+                        ),
                       ),
                       SizedBox(height: 4.h),
                       Text(
@@ -696,6 +728,14 @@ class UploadTile extends StatelessWidget {
                     ],
                   ),
                 ),
+                if (uploaded && onRemove != null)
+                  IconButton(
+                    onPressed: onRemove,
+                    icon: const Icon(Icons.cancel_rounded, color: Colors.red),
+                    iconSize: 24.sp,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
               ],
             ),
           ),
@@ -705,6 +745,7 @@ class UploadTile extends StatelessWidget {
   }
 
   Widget _doc() {
+    final showImage = uploaded && imageUrl != null && imageUrl!.isNotEmpty;
     return Material(
       color: AppColors.surface,
       shape: RoundedRectangleBorder(
@@ -729,34 +770,45 @@ class UploadTile extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12.r),
                 ),
                 alignment: Alignment.center,
-                child: Icon(
-                  uploaded ? Icons.check_rounded : icon,
-                  color: uploaded ? AppColors.secondary : AppColors.muted,
-                  size: 22.sp,
-                ),
+                child: showImage
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(12.r),
+                        child: CachedNetworkImage(
+                          imageUrl: imageUrl!,
+                          width: 46.w,
+                          height: 46.w,
+                          fit: BoxFit.cover,
+                          placeholder: (context, url) => const CircularProgressIndicator(strokeWidth: 2),
+                          errorWidget: (context, url, error) => const Icon(Icons.error_outline_rounded, color: Colors.red),
+                        ),
+                      )
+                    : Icon(
+                        uploaded ? Icons.check_rounded : icon,
+                        color: uploaded ? AppColors.secondary : AppColors.muted,
+                        size: 22.sp,
+                      ),
               ),
               SizedBox(width: 12.w),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            title,
-                            style: GoogleFonts.inter(
-                              fontSize: 13.5.sp,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.ink,
+                    Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(text: title),
+                          if (required)
+                            const TextSpan(
+                              text: ' *',
+                              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
                             ),
-                          ),
-                        ),
-                        if (required && !uploaded) ...[
-                          SizedBox(width: 7.w),
-                          _RequiredDot(),
                         ],
-                      ],
+                      ),
+                      style: GoogleFonts.inter(
+                        fontSize: 13.5.sp,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.ink,
+                      ),
                     ),
                     SizedBox(height: 2.h),
                     Text(
@@ -772,24 +824,47 @@ class UploadTile extends StatelessWidget {
                   ],
                 ),
               ),
-              Container(
-                padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 6.h),
-                decoration: BoxDecoration(
-                  color: uploaded
-                      ? AppColors.secondarySoft
-                      : AppColors.primarySoft,
-                  borderRadius: BorderRadius.circular(99.r),
-                ),
-                child: Text(
-                  uploaded ? 'Replace' : 'Upload',
-                  style: GoogleFonts.spaceGrotesk(
-                    fontSize: 11.sp,
-                    fontWeight: FontWeight.w700,
-                    color: uploaded
-                        ? AppColors.secondary
-                        : AppColors.primaryDark,
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 6.h),
+                    decoration: BoxDecoration(
+                      color: uploaded
+                          ? AppColors.secondarySoft
+                          : AppColors.primarySoft,
+                      borderRadius: BorderRadius.circular(99.r),
+                    ),
+                    child: Text(
+                      uploaded ? 'Replace' : 'Upload',
+                      style: GoogleFonts.spaceGrotesk(
+                        fontSize: 11.sp,
+                        fontWeight: FontWeight.w700,
+                        color: uploaded
+                            ? AppColors.secondary
+                            : AppColors.primaryDark,
+                      ),
+                    ),
                   ),
-                ),
+                  if (uploaded && onRemove != null) ...[
+                    SizedBox(width: 8.w),
+                    GestureDetector(
+                      onTap: onRemove,
+                      child: Container(
+                        padding: EdgeInsets.all(4.w),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFFFEBEE),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.close_rounded,
+                          color: Colors.red,
+                          size: 16.sp,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ],
           ),
@@ -799,6 +874,7 @@ class UploadTile extends StatelessWidget {
   }
 
   Widget _square() {
+    final showImage = uploaded && imageUrl != null && imageUrl!.isNotEmpty;
     return Material(
       color: Colors.transparent,
       child: Ink(
@@ -826,90 +902,106 @@ class UploadTile extends StatelessWidget {
             height: 130.h,
             child: Stack(
               children: [
-                Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 44.w,
-                        height: 44.w,
-                        decoration: BoxDecoration(
-                          color: uploaded ? AppColors.secondary : Colors.white,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color:
-                                  (uploaded
-                                          ? AppColors.secondary
-                                          : AppColors.ink)
-                                      .withValues(alpha: .12),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        alignment: Alignment.center,
-                        child: Icon(
-                          uploaded ? Icons.check_rounded : icon,
-                          color: uploaded ? Colors.white : AppColors.primary,
-                          size: 22.sp,
-                        ),
-                      ),
-                      SizedBox(height: 8.h),
-                      Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 6.w),
-                        child: Text(
-                          title,
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.inter(
-                            fontSize: 11.5.sp,
-                            fontWeight: FontWeight.w700,
-                            height: 1.25,
-                            color: uploaded
-                                ? AppColors.secondary
-                                : AppColors.ink,
+                if (showImage)
+                  Positioned.fill(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16.r),
+                      child: CachedNetworkImage(
+                        imageUrl: imageUrl!,
+                        fit: BoxFit.cover,
+                        placeholder: (context, url) => Container(
+                          color: AppColors.line,
+                          child: const Center(
+                            child: CircularProgressIndicator(strokeWidth: 2),
                           ),
                         ),
+                        errorWidget: (context, url, error) => const Center(
+                          child: Icon(Icons.error_outline_rounded, color: Colors.red),
+                        ),
                       ),
-                    ],
+                    ),
                   ),
-                ),
-                if (required && !uploaded)
+                if (!showImage)
+                  Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 44.w,
+                          height: 44.w,
+                          decoration: BoxDecoration(
+                            color: uploaded ? AppColors.secondary : Colors.white,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color:
+                                    (uploaded
+                                            ? AppColors.secondary
+                                            : AppColors.ink)
+                                        .withValues(alpha: .12),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          alignment: Alignment.center,
+                          child: Icon(
+                            uploaded ? Icons.check_rounded : icon,
+                            color: uploaded ? Colors.white : AppColors.primary,
+                            size: 22.sp,
+                          ),
+                        ),
+                        SizedBox(height: 8.h),
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 6.w),
+                          child: Text.rich(
+                            TextSpan(
+                              children: [
+                                TextSpan(text: title),
+                                if (required)
+                                  const TextSpan(
+                                    text: ' *',
+                                    style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                                  ),
+                              ],
+                            ),
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.inter(
+                              fontSize: 11.5.sp,
+                              fontWeight: FontWeight.w700,
+                              height: 1.25,
+                              color: uploaded
+                                  ? AppColors.secondary
+                                  : AppColors.ink,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (uploaded && onRemove != null)
                   Positioned(
                     top: 8.h,
                     right: 8.w,
-                    child: _RequiredDot(small: true),
+                    child: GestureDetector(
+                      onTap: onRemove,
+                      child: Container(
+                        padding: EdgeInsets.all(4.w),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.5),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.close_rounded,
+                          color: Colors.white,
+                          size: 16.sp,
+                        ),
+                      ),
+                    ),
                   ),
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _RequiredDot extends StatelessWidget {
-  const _RequiredDot({this.small = false});
-  final bool small;
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: small ? 6.w : 7.w,
-        vertical: small ? 2.h : 3.h,
-      ),
-      decoration: BoxDecoration(
-        color: AppColors.primary,
-        borderRadius: BorderRadius.circular(99.r),
-      ),
-      child: Text(
-        '*',
-        style: GoogleFonts.spaceGrotesk(
-          fontSize: small ? 11.sp : 12.sp,
-          fontWeight: FontWeight.w900,
-          color: Colors.white,
-          height: 1,
         ),
       ),
     );

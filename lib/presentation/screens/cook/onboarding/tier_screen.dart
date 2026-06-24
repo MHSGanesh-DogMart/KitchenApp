@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'package:provider/provider.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/routing/route_names.dart';
+import '../../../../providers/onboarding_provider.dart';
 import '_onboarding_widgets.dart';
 
 /// Cook onboarding · Choose tier (1 of 6).
@@ -20,14 +22,17 @@ class _CookTierScreenState extends State<CookTierScreen> {
   Widget build(BuildContext context) {
     return OnboardingScaffold(
       step: 1,
-      totalSteps: 6,
+      totalSteps: 5,
       kicker: 'Welcome aboard',
       title: "Choose how\nyou'll sell",
       subtitle: 'Most home cooks pick Tier 1 — it has the simplest onboarding.',
       ctaLabel: _tier == 1
           ? 'Continue as Home Chef'
           : 'Continue as Verified Kitchen',
-      onCta: () => Navigator.pushNamed(context, RouteNames.cookIdentity),
+      onCta: () {
+        Provider.of<OnboardingProvider>(context, listen: false).setTier(_tier);
+        Navigator.pushNamed(context, RouteNames.cookIdentity);
+      },
       body: [
         _TierCard(
           selected: _tier == 1,

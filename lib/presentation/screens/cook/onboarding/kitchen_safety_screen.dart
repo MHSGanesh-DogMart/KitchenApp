@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/routing/route_names.dart';
+import '../../../../core/services/image_picker_service.dart';
+import '../../../../core/services/toast_service.dart';
+import '../../../../providers/onboarding_provider.dart';
 import '_onboarding_widgets.dart';
 
 /// Cook · Kitchen & Food Safety (3 of 6).
@@ -18,22 +22,123 @@ class _CookKitchenSafetyScreenState extends State<CookKitchenSafetyScreen> {
   bool _cooking = false;
   bool _storage = false;
   bool _sink = false;
-  bool _gps = false;
+  bool _gps = true;
   bool _vegOnly = false;
-  bool _pledge = false;
+
+  bool _uploadingCooking = false;
+  bool _uploadingStorage = false;
+  bool _uploadingSink = false;
+
+  final _addressController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    final p = Provider.of<OnboardingProvider>(context, listen: false);
+    _cooking = p.cookingUrl.isNotEmpty;
+    _storage = p.storageUrl.isNotEmpty;
+    _sink = p.sinkUrl.isNotEmpty;
+    _vegOnly = p.isVegOnly;
+    _addressController.text = p.address;
+  }
+
+  @override
+  void dispose() {
+    _addressController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickAndUpload(String docType) async {
+    final provider = Provider.of<OnboardingProvider>(context, listen: false);
+    final file = await ImagePickerService.pickFromSheet();
+    if (file == null) return;
+
+    setState(() {
+      if (docType == 'cooking') _uploadingCooking = true;
+      if (docType == 'storage') _uploadingStorage = true;
+      if (docType == 'sink') _uploadingSink = true;
+    });
+
+    final ok = await provider.uploadDocument(docType, file);
+
+    if (mounted) {
+      setState(() {
+        if (docType == 'cooking') {
+          _uploadingCooking = false;
+          _cooking = ok;
+        }
+        if (docType == 'storage') {
+          _uploadingStorage = false;
+          _storage = ok;
+        }
+        if (docType == 'sink') {
+          _uploadingSink = false;
+          _sink = ok;
+        }
+      });
+      if (ok) {
+        ToastService.success('${docType[0].toUpperCase()}${docType.substring(1)} photo uploaded successfully.');
+      }
+    }
+  }
+
+  void _clearDocument(String docType) {
+    final provider = Provider.of<OnboardingProvider>(context, listen: false);
+    provider.clearDocument(docType);
+    setState(() {
+      if (docType == 'cooking') _cooking = false;
+      if (docType == 'storage') _storage = false;
+      if (docType == 'sink') _sink = false;
+    });
+    ToastService.success('${docType[0].toUpperCase()}${docType.substring(1)} photo removed.');
+  }
+
+  void _onContinue() {
+    final p = Provider.of<OnboardingProvider>(context, listen: false);
+    if (p.cookingUrl.isEmpty) {
+      ToastService.error('Cooking area photo is required.');
+      return;
+    }
+    if (p.storageUrl.isEmpty) {
+      ToastService.error('Storage / fridge photo is required.');
+      return;
+    }
+    if (p.sinkUrl.isEmpty) {
+      ToastService.error('Sink / washing area photo is required.');
+      return;
+    }
+    if (!_gps) {
+      ToastService.error('Please pin your kitchen location.');
+      return;
+    }
+    if (_addressController.text.trim().isEmpty) {
+      ToastService.error('Kitchen address is required.');
+      return;
+    }
+
+    p.updateField(
+      isVegOnly: _vegOnly,
+      lat: 17.4451,
+      lng: 78.3502,
+      address: _addressController.text.trim(),
+    );
+
+    Navigator.pushNamed(context, RouteNames.cookFssai);
+  }
 
   @override
   Widget build(BuildContext context) {
+    final provider = Provider.of<OnboardingProvider>(context);
     return OnboardingScaffold(
       step: 3,
-      totalSteps: 6,
+      totalSteps: 5,
       kicker: 'Your kitchen',
       title: 'Show off your\nkitchen',
       subtitle:
           'Real photos build trust. Customers want to see where their food is cooked.',
       gradient: const [Color(0xFFE1F2EC), Color(0xFFCFE9DC), Color(0xFFF1F8F4)],
       ctaLabel: 'Continue to FSSAI',
-      onCta: () => Navigator.pushNamed(context, RouteNames.cookFssai),
+      onCta: _onContinue,
       body: [
         OnboardingSection(
           title: 'Kitchen photos',
@@ -46,11 +151,13 @@ class _CookKitchenSafetyScreenState extends State<CookKitchenSafetyScreen> {
               child: UploadTile(
                 style: UploadStyle.square,
                 title: 'Cooking area',
-                helper: '',
+                helper: _uploadingCooking ? 'Uploading...' : '',
                 icon: Icons.local_fire_department_outlined,
                 uploaded: _cooking,
                 required: true,
-                onTap: () => setState(() => _cooking = !_cooking),
+                imageUrl: provider.cookingUrl,
+                onTap: () => _pickAndUpload('cooking'),
+                onRemove: () => _clearDocument('cooking'),
               ),
             ),
             SizedBox(width: 10.w),
@@ -58,11 +165,13 @@ class _CookKitchenSafetyScreenState extends State<CookKitchenSafetyScreen> {
               child: UploadTile(
                 style: UploadStyle.square,
                 title: 'Storage /\nfridge',
-                helper: '',
+                helper: _uploadingStorage ? 'Uploading...' : '',
                 icon: Icons.kitchen_outlined,
                 uploaded: _storage,
                 required: true,
-                onTap: () => setState(() => _storage = !_storage),
+                imageUrl: provider.storageUrl,
+                onTap: () => _pickAndUpload('storage'),
+                onRemove: () => _clearDocument('storage'),
               ),
             ),
             SizedBox(width: 10.w),
@@ -70,11 +179,13 @@ class _CookKitchenSafetyScreenState extends State<CookKitchenSafetyScreen> {
               child: UploadTile(
                 style: UploadStyle.square,
                 title: 'Sink /\nwashing',
-                helper: '',
+                helper: _uploadingSink ? 'Uploading...' : '',
                 icon: Icons.water_drop_outlined,
                 uploaded: _sink,
                 required: true,
-                onTap: () => setState(() => _sink = !_sink),
+                imageUrl: provider.sinkUrl,
+                onTap: () => _pickAndUpload('sink'),
+                onRemove: () => _clearDocument('sink'),
               ),
             ),
           ],
@@ -88,15 +199,43 @@ class _CookKitchenSafetyScreenState extends State<CookKitchenSafetyScreen> {
         ),
         _GpsCard(pinned: _gps, onTap: () => setState(() => _gps = !_gps)),
 
-        // SizedBox(height: 10.h),
-        // UploadTile(
-        //   title: 'Address proof',
-        //   helper: 'Electricity bill / rent agreement / gas bill',
-        //   icon: Icons.description_outlined,
-        //   uploaded: _addressProof,
-        //   required: true,
-        //   onTap: () => setState(() => _addressProof = !_addressProof),
-        // ),
+        SizedBox(height: 26.h),
+        OnboardingSection(
+          title: 'Kitchen Address',
+          hint: 'House/Flat number, Building, Street, Area',
+          icon: Icons.home_outlined,
+        ),
+        TextFormField(
+          controller: _addressController,
+          maxLines: 2,
+          decoration: InputDecoration(
+            hintText: 'Enter your complete kitchen address',
+            hintStyle: GoogleFonts.inter(
+              fontSize: 13.5.sp,
+              color: AppColors.muted,
+            ),
+            filled: true,
+            fillColor: AppColors.surface,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16.r),
+              borderSide: const BorderSide(color: AppColors.line),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16.r),
+              borderSide: const BorderSide(color: AppColors.line),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16.r),
+              borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+            ),
+            contentPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+          ),
+          style: GoogleFonts.inter(
+            fontSize: 14.sp,
+            color: AppColors.ink,
+          ),
+        ),
+
         SizedBox(height: 26.h),
         OnboardingSection(
           title: 'About your kitchen',
@@ -105,34 +244,6 @@ class _CookKitchenSafetyScreenState extends State<CookKitchenSafetyScreen> {
         _VegOnlyCard(
           value: _vegOnly,
           onChanged: (v) => setState(() => _vegOnly = v),
-        ),
-
-        // SizedBox(height: 14.h),
-        // ChoicePicker(
-        //   label: 'Primary cooking medium',
-        //   options: _oils,
-        //   value: _oil,
-        //   onChanged: (v) => setState(() => _oil = v),
-        // ),
-        // SizedBox(height: 14.h),
-        // ChoicePicker(
-        //   label: 'Drinking & cooking water',
-        //   options: _waters,
-        //   value: _water,
-        //   onChanged: (v) => setState(() => _water = v),
-        // ),
-        SizedBox(height: 26.h),
-        OnboardingSection(
-          title: 'Hygiene pledge',
-          icon: Icons.health_and_safety_outlined,
-        ),
-        ConsentTile(
-          checked: _pledge,
-          accent: AppColors.tier1,
-          title: 'I cook clean and stay healthy',
-          body:
-              'I follow hygiene practices, have no communicable disease, and use only fresh ingredients.',
-          onTap: () => setState(() => _pledge = !_pledge),
         ),
       ],
     );
@@ -200,14 +311,27 @@ class _GpsCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        pinned ? 'Location pinned' : 'Pin my exact location',
-                        style: GoogleFonts.spaceGrotesk(
-                          fontSize: 14.sp,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.ink,
-                          letterSpacing: -.1,
-                        ),
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              pinned ? 'Location pinned' : 'Pin my exact location',
+                              style: GoogleFonts.spaceGrotesk(
+                                fontSize: 14.sp,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.ink,
+                                letterSpacing: -.1,
+                              ),
+                            ),
+                          ),
+                          if (!pinned) ...[
+                            SizedBox(width: 6.w),
+                            const Text(
+                              '*',
+                              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ],
                       ),
                       SizedBox(height: 3.h),
                       Text(

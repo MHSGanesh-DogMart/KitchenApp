@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 // Auth (re-used; cooks log in by phone)
 import '../../presentation/screens/auth/intro_carousel_screen.dart';
 import '../../presentation/screens/auth/login_screen.dart';
-import '../../presentation/screens/auth/otp_verify_screen.dart';
 import '../../presentation/screens/auth/splash_screen.dart' as auth_splash;
 
 // Cook side — onboarding
@@ -11,9 +10,9 @@ import '../../presentation/screens/cook/onboarding/fssai_assist_screen.dart';
 import '../../presentation/screens/cook/onboarding/go_live_screen.dart';
 import '../../presentation/screens/cook/onboarding/identity_screen.dart';
 import '../../presentation/screens/cook/onboarding/kitchen_safety_screen.dart';
-import '../../presentation/screens/cook/onboarding/menu_setup_screen.dart';
 import '../../presentation/screens/cook/onboarding/operations_screen.dart';
 import '../../presentation/screens/cook/onboarding/tier_screen.dart';
+import '../../presentation/screens/cook/onboarding/status_screens.dart';
 
 // Cook side — tab shell + per-screen routes
 import '../../presentation/screens/cook/cook_help_screen.dart';
@@ -57,9 +56,6 @@ class AppRouter {
         return _page(const IntroCarouselScreen(), settings);
       case RouteNames.login:
         return _page(const LoginScreen(), settings);
-      case RouteNames.otp:
-        final phone = (settings.arguments as String?) ?? '+91 98xxx xxx21';
-        return _page(OtpVerifyScreen(phone: phone), settings);
 
       // ── Cook onboarding (becomeChef == cookTier alias) ──
       case RouteNames.cookTier:
@@ -70,12 +66,16 @@ class AppRouter {
         return _page(const CookKitchenSafetyScreen(), settings);
       case RouteNames.cookFssai:
         return _page(const CookFssaiAssistScreen(), settings);
-      case RouteNames.cookMenuSetup:
-        return _page(const CookMenuSetupScreen(), settings);
       case RouteNames.cookOperations:
         return _page(const CookOperationsScreen(), settings);
       case RouteNames.cookGoLive:
         return _page(const CookGoLiveScreen(), settings);
+      case RouteNames.cookPending:
+        return _page(const KitchenPendingScreen(), settings);
+      case RouteNames.cookRejected:
+        return _page(const KitchenRejectedScreen(), settings);
+      case RouteNames.cookFssaiAwaiting:
+        return _page(const FssaiAwaitingScreen(), settings);
 
       // ── Cook tab shell (Dashboard / Orders / Menu / More) ──
       // RouteNames.home is a string alias for cookDashboard.

@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:permission_handler/permission_handler.dart';
 import '../constants/app_strings.dart';
 import 'dialog_service.dart';
@@ -22,7 +23,10 @@ class PermissionService {
   }
 
   static Future<bool> camera() => request(Permission.camera);
-  static Future<bool> photos() => request(Permission.photos);
+  static Future<bool> photos() async {
+    if (Platform.isAndroid) return true;
+    return request(Permission.photos);
+  }
   static Future<bool> storage() => request(Permission.storage);
   static Future<bool> microphone() => request(Permission.microphone);
   static Future<bool> locationWhenInUse() => request(Permission.locationWhenInUse);

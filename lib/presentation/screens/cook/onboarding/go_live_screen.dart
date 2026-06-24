@@ -1,20 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
 import '../../../../core/constants/app_colors.dart';
-import '../../../../core/routing/route_names.dart';
+import '../../../../providers/auth_provider.dart';
+import '../../../../providers/onboarding_provider.dart';
 import '_onboarding_widgets.dart';
+import 'status_screens.dart';
 
 /// Cook · Go live review (6 of 6).
 class CookGoLiveScreen extends StatelessWidget {
   const CookGoLiveScreen({super.key});
 
+  Future<void> _onSubmit(BuildContext context) async {
+    final onboarding = Provider.of<OnboardingProvider>(context, listen: false);
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+
+    final status = await onboarding.submit(auth);
+    if (status != null && context.mounted) {
+      handleStatusNavigation(context, status);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final provider = Provider.of<OnboardingProvider>(context);
+
     return OnboardingScaffold(
-      step: 6,
-      totalSteps: 6,
+      step: 5,
+      totalSteps: 5,
       kicker: 'All set',
       title: 'You are ready\nto go live ✨',
       subtitle:
@@ -24,12 +39,9 @@ class CookGoLiveScreen extends StatelessWidget {
         Color(0xFFCFE9DC),
         Color(0xFFF1F8F4),
       ],
-      ctaLabel: 'Submit & go live',
-      onCta: () => Navigator.pushNamedAndRemoveUntil(
-        context,
-        RouteNames.cookDashboard,
-        (_) => false,
-      ),
+      ctaLabel: provider.submitting ? 'Submitting...' : 'Submit & go live',
+      ctaEnabled: !provider.submitting,
+      onCta: provider.submitting ? null : () => _onSubmit(context),
       body: [
         // ── Big celebration card ──
         _CelebrationCard(),
@@ -39,13 +51,29 @@ class CookGoLiveScreen extends StatelessWidget {
           title: "Here's what you submitted",
           icon: Icons.fact_check_outlined,
         ),
-        _ChecklistGroup(items: const [
-          _Item(icon: Icons.person_outline_rounded, title: 'Identity & KYC', value: 'Verified docs uploaded'),
-          _Item(icon: Icons.home_work_outlined, title: 'Kitchen & food safety', value: '3 photos · GPS · pledge'),
-          _Item(icon: Icons.verified_user_outlined, title: 'FSSAI Basic', value: 'Registration filed'),
-          _Item(icon: Icons.account_balance_outlined, title: 'Bank for payout', value: 'HDFC •• 8842'),
-          _Item(icon: Icons.restaurant_menu_outlined, title: 'Menu', value: '2 dishes ready'),
-          _Item(icon: Icons.assignment_turned_in_outlined, title: 'Operations & consent', value: 'All agreed'),
+        _ChecklistGroup(items: [
+          _Item(
+            icon: Icons.person_outline_rounded,
+            title: 'Identity & KYC',
+            value: '${provider.name} · Selfie, Aadhaar & PAN uploaded',
+          ),
+          _Item(
+            icon: Icons.home_work_outlined,
+            title: 'Kitchen & food safety',
+            value: '${provider.isVegOnly ? "100% Vegetarian" : "Standard Kitchen"} · Photos & Location pinned',
+          ),
+          _Item(
+            icon: Icons.verified_user_outlined,
+            title: 'FSSAI Status',
+            value: provider.hasExistingFssai
+                ? 'Existing FSSAI: ${provider.fssaiNumber}'
+                : 'FSSAI Basic filing registration (~₹100/yr)',
+          ),
+          _Item(
+            icon: Icons.assignment_turned_in_outlined,
+            title: 'Operations & consent',
+            value: 'Capacity: ${provider.capacity} orders/day · Consents signed',
+          ),
         ]),
 
         SizedBox(height: 18.h),
@@ -74,15 +102,17 @@ class CookGoLiveScreen extends StatelessWidget {
                       height: 1.55,
                       fontWeight: FontWeight.w600,
                     ),
-                    children: const [
-                      TextSpan(text: "You'll go live as "),
+                    children: [
+                      const TextSpan(text: "You'll go live as "),
                       TextSpan(
-                        text: 'Tier 1 Home Chef',
-                        style: TextStyle(fontWeight: FontWeight.w800),
+                        text: provider.tier == 1 ? 'Tier 1 Home Chef' : 'Tier 2 Verified Kitchen',
+                        style: const TextStyle(fontWeight: FontWeight.w800),
                       ),
                       TextSpan(
-                          text:
-                              '. Your storefront will show "Home Kitchen — FSSAI Basic" once verified.'),
+                        text: provider.tier == 1
+                            ? '. Your storefront will show "Home Kitchen — FSSAI Basic" once verified.'
+                            : '. Your storefront will show "Verified Kitchen — Licensed" once verified.',
+                      ),
                     ],
                   ),
                 ),

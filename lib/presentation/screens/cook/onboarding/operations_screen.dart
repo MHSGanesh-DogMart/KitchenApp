@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/routing/route_names.dart';
+import '../../../../core/services/toast_service.dart';
+import '../../../../providers/onboarding_provider.dart';
 import '_onboarding_widgets.dart';
 
 /// Cook · Operations & Consent (5 of 6).
@@ -19,7 +22,7 @@ class _CookOperationsScreenState extends State<CookOperationsScreen> {
   bool _lunch = true;
   bool _dinner = true;
 
-  final _capacity = TextEditingController(text: '20');
+  final _capacity = TextEditingController();
   String _cutOff = '2 hours';
   String _packaging = 'Eco-friendly box';
   String _delivery = 'Platform delivery';
@@ -48,16 +51,61 @@ class _CookOperationsScreenState extends State<CookOperationsScreen> {
       _consentHygiene && _consentTnC && _consentPhotos;
 
   @override
+  void initState() {
+    super.initState();
+    final p = Provider.of<OnboardingProvider>(context, listen: false);
+    _breakfast = p.mealBreakfast;
+    _lunch = p.mealLunch;
+    _dinner = p.mealDinner;
+    _capacity.text = p.capacity > 0 ? p.capacity.toString() : '';
+    _cutOff = p.cutoffNotice;
+    _packaging = p.packagingType;
+    _delivery = p.deliveryMode;
+    _offDays.addAll(p.offDays);
+    _consentHygiene = p.consentHygiene;
+    _consentTnC = p.consentTnC;
+    _consentPhotos = p.consentPhotos;
+  }
+
+  @override
   void dispose() {
     _capacity.dispose();
     super.dispose();
   }
 
+  void _onContinue() {
+    if (_capacity.text.trim().isEmpty) {
+      ToastService.error('Daily order capacity is required.');
+      return;
+    }
+    if (!_breakfast && !_lunch && !_dinner) {
+      ToastService.error('Please select at least one meal time.');
+      return;
+    }
+
+    final p = Provider.of<OnboardingProvider>(context, listen: false);
+    p.updateField(
+      mealBreakfast: _breakfast,
+      mealLunch: _lunch,
+      mealDinner: _dinner,
+      capacity: int.tryParse(_capacity.text.trim()) ?? 20,
+      cutoffNotice: _cutOff,
+      packagingType: _packaging,
+      deliveryMode: _delivery,
+      offDays: _offDays,
+      consentHygiene: _consentHygiene,
+      consentTnC: _consentTnC,
+      consentPhotos: _consentPhotos,
+    );
+
+    Navigator.pushNamed(context, RouteNames.cookGoLive);
+  }
+
   @override
   Widget build(BuildContext context) {
     return OnboardingScaffold(
-      step: 5,
-      totalSteps: 6,
+      step: 4,
+      totalSteps: 5,
       kicker: 'Operations',
       title: 'How you\nwork',
       subtitle:
@@ -69,9 +117,7 @@ class _CookOperationsScreenState extends State<CookOperationsScreen> {
       ],
       ctaLabel: _allConsents ? 'Continue to Review' : 'Accept all to continue',
       ctaEnabled: _allConsents,
-      onCta: _allConsents
-          ? () => Navigator.pushNamed(context, RouteNames.cookGoLive)
-          : null,
+      onCta: _allConsents ? _onContinue : null,
       body: [
         OnboardingSection(
           title: 'Meals you cook',
@@ -114,6 +160,7 @@ class _CookOperationsScreenState extends State<CookOperationsScreen> {
                 label: 'Orders / day',
                 hint: '20',
                 keyboardType: TextInputType.number,
+                required: true,
                 inputFormatters: [
                   FilteringTextInputFormatter.digitsOnly,
                   LengthLimitingTextInputFormatter(3),

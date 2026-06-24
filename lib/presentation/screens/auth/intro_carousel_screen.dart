@@ -43,7 +43,9 @@ class _IntroCarouselScreenState extends State<IntroCarouselScreen> {
       Navigator.pushReplacementNamed(context, RouteNames.login);
     } else {
       _ctrl.nextPage(
-          duration: const Duration(milliseconds: 280), curve: Curves.easeOut);
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOut,
+      );
     }
   }
 
@@ -56,32 +58,34 @@ class _IntroCarouselScreenState extends State<IntroCarouselScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        actions: [
+          Row(
+            children: [
+              TextButton(
+                onPressed: () =>
+                    Navigator.pushReplacementNamed(context, RouteNames.login),
+                child: Text(
+                  'Skip',
+                  style: GoogleFonts.inter(
+                    fontSize: 13.sp,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.primaryDark,
+                  ),
+                ),
+              ),
+              SizedBox(width: 16.w),
+            ],
+          ),
+        ],
+      ),
       backgroundColor: AppColors.background,
       body: SafeArea(
         child: Padding(
           padding: EdgeInsets.fromLTRB(20.w, 8.h, 20.w, 20.h),
           child: Column(
             children: [
-              // Header: empty space + Skip
-              Row(
-                children: [
-                  SizedBox(width: 38.w),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: () => Navigator.pushReplacementNamed(
-                        context, RouteNames.login),
-                    child: Text(
-                      'Skip',
-                      style: GoogleFonts.inter(
-                        fontSize: 13.sp,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.primaryDark,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-
               // Pages
               Expanded(
                 child: PageView.builder(

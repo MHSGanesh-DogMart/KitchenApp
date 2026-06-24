@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "813906344237",
+    "project_id": "padosi-2dd11",
+    "storage_bucket": "padosi-2dd11.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:813906344237:android:5bdf0019f6c5f6bec4bba4",
+        "android_client_info": {
+          "package_name": "com.padosi.kitchen"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAHt7hKdxkYLTdc5IjEJrP_c7bBHXf6__k"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:813906344237:android:9d13f72b8fbce6a6c4bba4",
+        "android_client_info": {
+          "package_name": "com.padosi.user"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAHt7hKdxkYLTdc5IjEJrP_c7bBHXf6__k"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -15,6 +15,7 @@ import 'providers/auth_provider.dart';
 import 'providers/connectivity_provider.dart';
 import 'providers/notification_provider.dart';
 import 'providers/theme_provider.dart';
+import 'providers/onboarding_provider.dart';
 
 void main() {
   runZonedGuarded(() async {
@@ -49,6 +50,7 @@ void main() {
           ChangeNotifierProvider(create: (_) => ConnectivityProvider()),
           ChangeNotifierProvider(create: (_) => ThemeProvider()),
           ChangeNotifierProvider(create: (_) => NotificationProvider()),
+          ChangeNotifierProvider(create: (_) => OnboardingProvider()),
         ],
         child: const App(),
       ),

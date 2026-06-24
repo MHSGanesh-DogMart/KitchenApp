@@ -1,4 +1,6 @@
 import 'package:flutter/foundation.dart';
+import 'package:padosi_food/core/config/api_endpoints.dart';
+import 'package:padosi_food/core/network/api_client.dart';
 
 import '../core/notifications/notification_service.dart';
 import '../core/routing/route_names.dart';
@@ -45,6 +47,35 @@ class AuthProvider extends ChangeNotifier {
     if (!silent) {
       NavigationService.pushNamedAndRemoveUntil(RouteNames.login);
     }
+  }
+
+  Future<String?> checkKitchenStatus() async {
+    try {
+      final response = await ApiClient.instance.get(ApiEndpoints.getStatus);
+      if (response.statusCode == 200 && response.data != null) {
+        final statusVal = response.data['status'] as String?;
+        return statusVal;
+      }
+    } catch (e) {
+      AppLogger.e('Error checking kitchen status: $e');
+    }
+    return null;
+  }
+
+  Future<bool> syncFcmToken(String fcmToken) async {
+    try {
+      final response = await ApiClient.instance.post(
+        ApiEndpoints.updateFcmToken,
+        body: {'fcmToken': fcmToken},
+      );
+      if (response.statusCode == 200) {
+        AppLogger.i('FCM token synchronized successfully.');
+        return true;
+      }
+    } catch (e) {
+      AppLogger.e('Error synchronizing FCM token: $e');
+    }
+    return false;
   }
 
   Future<void> handleUnauthorized() async {

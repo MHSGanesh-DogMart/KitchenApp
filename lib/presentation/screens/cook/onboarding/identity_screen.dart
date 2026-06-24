@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:provider/provider.dart';
 
 import '../../../../core/routing/route_names.dart';
+import '../../../../core/services/image_picker_service.dart';
+import '../../../../core/services/toast_service.dart';
+import '../../../../providers/onboarding_provider.dart';
 import '_onboarding_widgets.dart';
 
 /// Cook · Identity & KYC (2 of 6).
@@ -17,12 +21,29 @@ class _CookIdentityScreenState extends State<CookIdentityScreen> {
   bool _aadhaar = false;
   bool _pan = false;
 
-  final _name = TextEditingController(text: 'Sunita Sharma');
+  bool _uploadingSelfie = false;
+  bool _uploadingAadhaar = false;
+  bool _uploadingPan = false;
+
+  final _name = TextEditingController();
   final _dob = TextEditingController();
   final _aadhaarNo = TextEditingController();
   final _panNo = TextEditingController();
   final _whatsapp = TextEditingController();
-  final _alt = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    final p = Provider.of<OnboardingProvider>(context, listen: false);
+    _name.text = p.name;
+    _dob.text = p.dob;
+    _whatsapp.text = p.whatsapp;
+    _aadhaarNo.text = p.aadhaarNo;
+    _panNo.text = p.panNo;
+    _selfie = p.selfieUrl.isNotEmpty;
+    _aadhaar = p.aadhaarUrl.isNotEmpty;
+    _pan = p.panUrl.isNotEmpty;
+  }
 
   @override
   void dispose() {
@@ -31,7 +52,6 @@ class _CookIdentityScreenState extends State<CookIdentityScreen> {
     _aadhaarNo.dispose();
     _panNo.dispose();
     _whatsapp.dispose();
-    _alt.dispose();
     super.dispose();
   }
 
@@ -51,11 +71,104 @@ class _CookIdentityScreenState extends State<CookIdentityScreen> {
     }
   }
 
+  Future<void> _pickAndUpload(String docType) async {
+    final provider = Provider.of<OnboardingProvider>(context, listen: false);
+    final file = await ImagePickerService.pickFromSheet();
+    if (file == null) return;
+
+    setState(() {
+      if (docType == 'selfie') _uploadingSelfie = true;
+      if (docType == 'aadhaar') _uploadingAadhaar = true;
+      if (docType == 'pan') _uploadingPan = true;
+    });
+
+    final ok = await provider.uploadDocument(docType, file);
+
+    if (mounted) {
+      setState(() {
+        if (docType == 'selfie') {
+          _uploadingSelfie = false;
+          _selfie = ok;
+        }
+        if (docType == 'aadhaar') {
+          _uploadingAadhaar = false;
+          _aadhaar = ok;
+        }
+        if (docType == 'pan') {
+          _uploadingPan = false;
+          _pan = ok;
+        }
+      });
+      if (ok) {
+        ToastService.success('${docType[0].toUpperCase()}${docType.substring(1)} uploaded successfully.');
+      }
+    }
+  }
+
+  void _clearDocument(String docType) {
+    final provider = Provider.of<OnboardingProvider>(context, listen: false);
+    provider.clearDocument(docType);
+    setState(() {
+      if (docType == 'selfie') _selfie = false;
+      if (docType == 'aadhaar') _aadhaar = false;
+      if (docType == 'pan') _pan = false;
+    });
+    ToastService.success('${docType[0].toUpperCase()}${docType.substring(1)} removed successfully.');
+  }
+
+  void _onContinue() {
+    final p = Provider.of<OnboardingProvider>(context, listen: false);
+    if (p.selfieUrl.isEmpty) {
+      ToastService.error('Please upload a live selfie.');
+      return;
+    }
+    if (_name.text.trim().isEmpty) {
+      ToastService.error('Full name is required.');
+      return;
+    }
+    if (_dob.text.trim().isEmpty) {
+      ToastService.error('Date of birth is required.');
+      return;
+    }
+    if (_whatsapp.text.trim().length != 10) {
+      ToastService.error('Valid 10-digit WhatsApp number is required.');
+      return;
+    }
+    if (_aadhaarNo.text.trim().length != 12) {
+      ToastService.error('Valid 12-digit Aadhaar number is required.');
+      return;
+    }
+    if (p.aadhaarUrl.isEmpty) {
+      ToastService.error('Please upload your Aadhaar card.');
+      return;
+    }
+    if (_panNo.text.trim().length != 10) {
+      ToastService.error('Valid 10-character PAN number is required.');
+      return;
+    }
+    if (p.panUrl.isEmpty) {
+      ToastService.error('Please upload your PAN card photo.');
+      return;
+    }
+
+    p.updateField(
+      name: _name.text.trim(),
+      dob: _dob.text.trim(),
+      whatsapp: _whatsapp.text.trim(),
+      altContact: '',
+      aadhaarNo: _aadhaarNo.text.trim(),
+      panNo: _panNo.text.trim(),
+    );
+
+    Navigator.pushNamed(context, RouteNames.cookKitchenSafety);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final provider = Provider.of<OnboardingProvider>(context);
     return OnboardingScaffold(
       step: 2,
-      totalSteps: 6,
+      totalSteps: 5,
       kicker: 'Identity',
       title: "Let's verify\nit's you",
       subtitle:
@@ -66,8 +179,7 @@ class _CookIdentityScreenState extends State<CookIdentityScreen> {
         Color(0xFFFFF7F1),
       ],
       ctaLabel: 'Continue to Kitchen',
-      onCta: () =>
-          Navigator.pushNamed(context, RouteNames.cookKitchenSafety),
+      onCta: _onContinue,
       body: [
         // Selfie hero
         OnboardingSection(
@@ -78,11 +190,13 @@ class _CookIdentityScreenState extends State<CookIdentityScreen> {
         UploadTile(
           style: UploadStyle.hero,
           title: 'Take a live selfie',
-          helper: 'Hold your face inside the frame',
+          helper: _uploadingSelfie ? 'Uploading selfie...' : 'Hold your face inside the frame',
           icon: Icons.add_a_photo_outlined,
           uploaded: _selfie,
           required: true,
-          onTap: () => setState(() => _selfie = !_selfie),
+          imageUrl: provider.selfieUrl,
+          onTap: () => _pickAndUpload('selfie'),
+          onRemove: () => _clearDocument('selfie'),
         ),
 
         SizedBox(height: 26.h),
@@ -94,6 +208,7 @@ class _CookIdentityScreenState extends State<CookIdentityScreen> {
           controller: _name,
           label: 'Full name (as on Aadhaar)',
           hint: 'Sunita Sharma',
+          required: true,
         ),
         SizedBox(height: 10.h),
         PremiumField(
@@ -103,35 +218,18 @@ class _CookIdentityScreenState extends State<CookIdentityScreen> {
           readOnly: true,
           onTap: _pickDob,
           suffixIcon: Icons.calendar_today_rounded,
+          required: true,
         ),
         SizedBox(height: 10.h),
-        Row(
-          children: [
-            Expanded(
-              child: PremiumField(
-                controller: _whatsapp,
-                label: 'WhatsApp',
-                hint: '10 digits',
-                keyboardType: TextInputType.phone,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(10),
-                ],
-              ),
-            ),
-            SizedBox(width: 10.w),
-            Expanded(
-              child: PremiumField(
-                controller: _alt,
-                label: 'Alt contact',
-                hint: 'Family',
-                keyboardType: TextInputType.phone,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(10),
-                ],
-              ),
-            ),
+        PremiumField(
+          controller: _whatsapp,
+          label: 'WhatsApp',
+          hint: '10 digits',
+          keyboardType: TextInputType.phone,
+          required: true,
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(10),
           ],
         ),
 
@@ -145,6 +243,7 @@ class _CookIdentityScreenState extends State<CookIdentityScreen> {
           controller: _aadhaarNo,
           label: 'Aadhaar number',
           hint: '12 digits',
+          required: true,
           keyboardType: TextInputType.number,
           inputFormatters: [
             FilteringTextInputFormatter.digitsOnly,
@@ -154,11 +253,13 @@ class _CookIdentityScreenState extends State<CookIdentityScreen> {
         SizedBox(height: 10.h),
         UploadTile(
           title: 'Aadhaar — front & back',
-          helper: 'Both sides in one frame, or two photos',
+          helper: _uploadingAadhaar ? 'Uploading Aadhaar...' : 'Both sides in one frame, or two photos',
           icon: Icons.cloud_upload_outlined,
           uploaded: _aadhaar,
           required: true,
-          onTap: () => setState(() => _aadhaar = !_aadhaar),
+          imageUrl: provider.aadhaarUrl,
+          onTap: () => _pickAndUpload('aadhaar'),
+          onRemove: () => _clearDocument('aadhaar'),
         ),
 
         SizedBox(height: 26.h),
@@ -171,17 +272,20 @@ class _CookIdentityScreenState extends State<CookIdentityScreen> {
           controller: _panNo,
           label: 'PAN number',
           hint: 'ABCDE1234F',
+          required: true,
           textCapitalization: TextCapitalization.characters,
           inputFormatters: [LengthLimitingTextInputFormatter(10)],
         ),
         SizedBox(height: 10.h),
         UploadTile(
           title: 'PAN card photo',
-          helper: 'Clear, all 4 corners visible',
+          helper: _uploadingPan ? 'Uploading PAN...' : 'Clear, all 4 corners visible',
           icon: Icons.cloud_upload_outlined,
           uploaded: _pan,
           required: true,
-          onTap: () => setState(() => _pan = !_pan),
+          imageUrl: provider.panUrl,
+          onTap: () => _pickAndUpload('pan'),
+          onRemove: () => _clearDocument('pan'),
         ),
 
         SizedBox(height: 20.h),

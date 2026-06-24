@@ -8,7 +8,10 @@ import '../../../core/constants/app_sizes.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/routing/route_names.dart';
+import '../../../core/notifications/notification_service.dart';
+import '../../../core/utils/logger.dart';
 import '../../../providers/auth_provider.dart';
+import '../cook/onboarding/status_screens.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -27,12 +30,39 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _bootstrap() async {
+    final auth = context.read<AuthProvider>();
     await Future.wait([
-      context.read<AuthProvider>().restoreSession(),
+      auth.restoreSession(),
       Future.delayed(_minDisplay),
     ]);
     if (!mounted) return;
-    Navigator.of(context).pushReplacementNamed(RouteNames.onboarding);
+
+    if (auth.status == AuthStatus.authenticated) {
+      // Sync FCM push token in splash in case it failed before
+      final fcmToken = NotificationService.instance.token;
+      if (fcmToken != null && fcmToken.isNotEmpty) {
+        auth.syncFcmToken(fcmToken).catchError((err) {
+          AppLogger.w('Background FCM token sync failed in splash: $err');
+          return false;
+        });
+      }
+
+      // Query status and navigate accordingly
+      final status = await auth.checkKitchenStatus();
+      if (mounted) {
+        if (status != null) {
+          handleStatusNavigation(context, status);
+        } else {
+          // Status check failed or token invalid -> logout and go to onboarding intro
+          await auth.logout(silent: true);
+          if (mounted) {
+            Navigator.of(context).pushReplacementNamed(RouteNames.onboarding);
+          }
+        }
+      }
+    } else {
+      Navigator.of(context).pushReplacementNamed(RouteNames.onboarding);
+    }
   }
 
   @override

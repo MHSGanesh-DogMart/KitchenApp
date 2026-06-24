@@ -14,7 +14,6 @@ class RouteNames {
   static const String onboarding = '/onboarding'; // alias for splash
   static const String authIntro = '/auth/intro';
   static const String login = '/auth/login';
-  static const String otp = '/auth/otp';
 
   // ── Legacy alias — kept so old cook screens that point to
   // RouteNames.home land on the dashboard cleanly. ──
@@ -26,9 +25,11 @@ class RouteNames {
   static const String cookIdentity = '/cook/identity';
   static const String cookKitchenSafety = '/cook/kitchen-safety';
   static const String cookFssai = '/cook/fssai';
-  static const String cookMenuSetup = '/cook/menu-setup';
   static const String cookOperations = '/cook/operations';
   static const String cookGoLive = '/cook/go-live';
+  static const String cookFssaiAwaiting = '/cook/status/fssai-awaiting';
+  static const String cookPending = '/cook/status/pending';
+  static const String cookRejected = '/cook/status/rejected';
 
   // ── Cook tab shell (mockups 55-65) ──
   static const String cookDashboard = '/cook/dashboard';

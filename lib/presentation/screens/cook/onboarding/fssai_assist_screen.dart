@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'package:provider/provider.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/routing/route_names.dart';
+import '../../../../core/services/toast_service.dart';
+import '../../../../providers/onboarding_provider.dart';
 import '_onboarding_widgets.dart';
 
 /// Cook · FSSAI assist (3b of 6).
@@ -14,7 +17,7 @@ class CookFssaiAssistScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return OnboardingScaffold(
       step: 3,
-      totalSteps: 6,
+      totalSteps: 5,
       kicker: 'FSSAI registration',
       title: "We'll get you\nFSSAI ready",
       subtitle:
@@ -25,7 +28,11 @@ class CookFssaiAssistScreen extends StatelessWidget {
         Color(0xFFFFF7E7),
       ],
       ctaLabel: 'Register me for FSSAI Basic',
-      onCta: () => Navigator.pushNamed(context, RouteNames.cookMenuSetup),
+      onCta: () {
+        final p = Provider.of<OnboardingProvider>(context, listen: false);
+        p.updateField(hasExistingFssai: false);
+        Navigator.pushNamed(context, RouteNames.cookOperations);
+      },
       body: [
         OnboardingSection(
           title: 'How it works',
@@ -69,7 +76,16 @@ class _AlreadyHave extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: () {},
+      onTap: () {
+        final p = Provider.of<OnboardingProvider>(context, listen: false);
+        p.updateField(
+          hasExistingFssai: true,
+          fssaiNumber: '23624003000124',
+          fssaiExpiry: '2027-12-31',
+        );
+        ToastService.success('Existing FSSAI license registered.');
+        Navigator.pushNamed(context, RouteNames.cookOperations);
+      },
       borderRadius: BorderRadius.circular(12.r),
       child: Padding(
         padding: EdgeInsets.symmetric(vertical: 8.h),

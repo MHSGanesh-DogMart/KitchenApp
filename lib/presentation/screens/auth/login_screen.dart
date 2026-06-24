@@ -6,9 +6,15 @@ import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:pinput/pinput.dart';
+import 'package:provider/provider.dart';
 
+import '../../../controllers/auth_controller.dart';
+import '../../../providers/auth_provider.dart';
+import '../../../providers/onboarding_provider.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/routing/route_names.dart';
+import '../../../core/notifications/notification_service.dart';
+import '../cook/onboarding/status_screens.dart';
 
 /// Sign in — hero food photo + sliding white sheet (mockup-style).
 ///
@@ -81,16 +87,22 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
     setState(() => _sending = true);
-    await Future.delayed(const Duration(milliseconds: 600));
+    final phoneStr = '+91${_phoneCtrl.text}';
+    final success = await AuthController.instance.sendOtp(phoneStr);
     if (!mounted) return;
-    setState(() {
-      _sending = false;
-      _otpSent = true;
-    });
-    _startResendTimer();
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => _otpFocus.requestFocus(),
-    );
+
+    if (success) {
+      setState(() {
+        _sending = false;
+        _otpSent = true;
+      });
+      _startResendTimer();
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _otpFocus.requestFocus(),
+      );
+    } else {
+      setState(() => _sending = false);
+    }
   }
 
   void _startResendTimer() {
@@ -116,13 +128,33 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _verifyOtp() async {
     if (_otpCode.length < _otpLength) return;
     setState(() => _verifying = true);
-    await Future.delayed(const Duration(milliseconds: 600));
+    final phoneStr = '+91${_phoneCtrl.text}';
+    final fcmToken = NotificationService.instance.token;
+    final result = await AuthController.instance.verifyOtp(
+      phoneStr,
+      _otpCode,
+      fcmToken: fcmToken,
+    );
     if (!mounted) return;
-    if (_otpCode == '1234') {
-      // Chef app — first-time cook lands on tier picker; returning
-      // cooks can later be routed straight to the dashboard once auth
-      // state is wired.
-      Navigator.pushReplacementNamed(context, RouteNames.cookTier);
+
+    if (result != null) {
+      setState(() => _verifying = false);
+      final isRegistered = result['isRegistered'] as bool? ?? false;
+      final token = result['token'] as String?;
+
+      if (isRegistered) {
+        if (token != null && token.isNotEmpty) {
+          final authProvider = Provider.of<AuthProvider>(context, listen: false);
+          await authProvider.onLoginSuccess(token);
+        }
+        if (!mounted) return;
+        final status = result['status'] as String? ?? 'Kitchen_Approved';
+        handleStatusNavigation(context, status);
+      } else {
+        // First-time cook -> go to onboarding tier selection (Create Account)
+        Provider.of<OnboardingProvider>(context, listen: false).setPhone(phoneStr);
+        Navigator.pushReplacementNamed(context, RouteNames.cookTier);
+      }
     } else {
       setState(() {
         _otpError = true;
