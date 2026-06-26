@@ -3,7 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../controllers/menu_controller.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/services/image_picker_service.dart';
 import 'onboarding/_onboarding_widgets.dart';
 
 /// Pass as `arguments` to [DishEditScreen] to prefill (edit mode).
@@ -19,12 +21,15 @@ class DishDraft {
     required this.spice,
     required this.ingredients,
     required this.shelfLife,
-    required this.allergens,
     required this.cookingMedium,
     required this.description,
     required this.photoUploaded,
     required this.live,
+    this.id,
+    this.imageUrl,
   });
+  final String? id; // null → add mode; non-null → edit existing menu item
+  final String? imageUrl;
   final String name;
   final int price;
   final int perDay;
@@ -34,7 +39,6 @@ class DishDraft {
   final String spice;
   final String ingredients;
   final String shelfLife;
-  final Set<String> allergens;
   final String cookingMedium;
   final String description;
   final bool photoUploaded;
@@ -61,40 +65,38 @@ class _DishEditScreenState extends State<DishEditScreen> {
 
   // ── Photo ──
   late bool _photo = widget.initial?.photoUploaded ?? false;
+  late String? _imageUrl = widget.initial?.imageUrl;
+  bool _uploadingPhoto = false;
+  bool _busy = false;
 
   // ── Text fields ──
   late final _name = TextEditingController(text: widget.initial?.name ?? '');
-  late final _price =
-      TextEditingController(text: widget.initial?.price.toString() ?? '');
-  late final _qty =
-      TextEditingController(text: widget.initial?.perDay.toString() ?? '');
-  late final _portion =
-      TextEditingController(text: widget.initial?.portion ?? '');
-  late final _ingredients =
-      TextEditingController(text: widget.initial?.ingredients ?? '');
-  late final _shelf =
-      TextEditingController(text: widget.initial?.shelfLife ?? '');
-  late final _description =
-      TextEditingController(text: widget.initial?.description ?? '');
+  late final _price = TextEditingController(
+    text: widget.initial?.price.toString() ?? '',
+  );
+  late final _qty = TextEditingController(
+    text: widget.initial?.perDay.toString() ?? '',
+  );
+  late final _portion = TextEditingController(
+    text: widget.initial?.portion ?? '',
+  );
+  late final _ingredients = TextEditingController(
+    text: widget.initial?.ingredients ?? '',
+  );
+  late final _shelf = TextEditingController(
+    text: widget.initial?.shelfLife ?? '',
+  );
+  late final _description = TextEditingController(
+    text: widget.initial?.description ?? '',
+  );
 
   // ── Pickers ──
   late String _diet = widget.initial?.diet ?? 'Veg';
-  late bool _eggless = widget.initial?.eggless ?? true;
   late String _spice = widget.initial?.spice ?? 'Medium';
-  late final Set<String> _allergens = {...?widget.initial?.allergens};
   late bool _live = widget.initial?.live ?? true;
 
   static const _diets = ['Veg', 'Non-veg', 'Vegan', 'Jain'];
   static const _spices = ['Mild', 'Medium', 'Spicy', 'Extra spicy'];
-  static const _allergenList = [
-    'Dairy',
-    'Nuts',
-    'Gluten',
-    'Egg',
-    'Soy',
-    'Mustard',
-    'Sesame',
-  ];
 
   @override
   void dispose() {
@@ -118,21 +120,55 @@ class _DishEditScreenState extends State<DishEditScreen> {
 
   void _refresh() => setState(() {});
 
-  void _save() {
-    Navigator.pop(context, true);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: AppColors.ink,
-        content: Text(
-          _editing
-              ? 'Changes saved'
-              : (_live ? 'Dish added and live' : 'Dish saved · paused'),
-          style: GoogleFonts.spaceGrotesk(
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-    );
+  /// Pick + upload a dish photo, then store the hosted URL.
+  Future<void> _pickPhoto() async {
+    final file = await ImagePickerService.pickFromSheet();
+    if (file == null) return;
+    setState(() => _uploadingPhoto = true);
+    final url = await MenuApiController.instance.uploadImage(file);
+    if (!mounted) return;
+    setState(() {
+      _uploadingPhoto = false;
+      if (url != null) {
+        _imageUrl = url;
+        _photo = true;
+      }
+    });
+  }
+
+  /// Clear the selected dish photo.
+  void _removePhoto() {
+    setState(() {
+      _imageUrl = null;
+      _photo = false;
+    });
+  }
+
+  Future<void> _save() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+
+    final body = <String, dynamic>{
+      'name': _name.text.trim(),
+      'price': int.tryParse(_price.text.trim()) ?? 0,
+      'perDay': int.tryParse(_qty.text.trim()) ?? 0,
+      if (_imageUrl != null && _imageUrl!.isNotEmpty) 'imageUrl': _imageUrl,
+      'diet': _diet,
+      'spice': _spice,
+      'portion': _portion.text.trim(),
+      'ingredients': _ingredients.text.trim(),
+      'description': _description.text.trim(),
+      'isAvailable': _live,
+    };
+
+    final id = widget.initial?.id;
+    final result = (id != null && id.isNotEmpty)
+        ? await MenuApiController.instance.updateMenu(id, body)
+        : await MenuApiController.instance.addMenu(body);
+
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (result != null) Navigator.pop(context, true);
   }
 
   Future<void> _confirmDelete() async {
@@ -181,13 +217,24 @@ class _DishEditScreenState extends State<DishEditScreen> {
         ],
       ),
     );
-    if (ok == true && mounted) Navigator.pop(context, 'deleted');
+    if (ok == true && mounted) {
+      final id = widget.initial?.id;
+      if (id != null && id.isNotEmpty) {
+        final deleted = await MenuApiController.instance.deleteMenu(id);
+        if (deleted && mounted) Navigator.pop(context, 'deleted');
+      } else {
+        Navigator.pop(context, 'deleted');
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
+      // Keep the sticky CTA pinned to the real bottom — don't let the
+      // keyboard push it up over the fields.
+      resizeToAvoidBottomInset: false,
       body: Stack(
         children: [
           // Soft gradient backdrop (same warmth as onboarding).
@@ -275,12 +322,16 @@ class _DishEditScreenState extends State<DishEditScreen> {
                       ),
                       UploadTile(
                         style: UploadStyle.hero,
-                        title: 'Add a real photo',
+                        title: _uploadingPhoto
+                            ? 'Uploading…'
+                            : 'Add a real photo',
                         helper: 'No stock images',
                         icon: Icons.add_a_photo_outlined,
                         uploaded: _photo,
                         required: true,
-                        onTap: () => setState(() => _photo = !_photo),
+                        imageUrl: _imageUrl,
+                        onTap: _uploadingPhoto ? () {} : _pickPhoto,
+                        onRemove: _photo ? _removePhoto : null,
                       ),
 
                       // ── Basic info ──
@@ -293,6 +344,8 @@ class _DishEditScreenState extends State<DishEditScreen> {
                         controller: _name,
                         label: 'Dish name',
                         hint: 'e.g. Veg Thali',
+                        textCapitalization: TextCapitalization.words,
+                        required: true,
                       ),
                       SizedBox(height: 10.h),
                       Row(
@@ -302,6 +355,7 @@ class _DishEditScreenState extends State<DishEditScreen> {
                               controller: _price,
                               label: 'Price (₹)',
                               hint: '120',
+                              required: true,
                               keyboardType: TextInputType.number,
                               inputFormatters: [
                                 FilteringTextInputFormatter.digitsOnly,
@@ -315,6 +369,7 @@ class _DishEditScreenState extends State<DishEditScreen> {
                               controller: _qty,
                               label: 'Qty / day',
                               hint: '20',
+                              required: true,
                               keyboardType: TextInputType.number,
                               inputFormatters: [
                                 FilteringTextInputFormatter.digitsOnly,
@@ -345,30 +400,11 @@ class _DishEditScreenState extends State<DishEditScreen> {
                         onChanged: (v) => setState(() => _spice = v),
                       ),
 
-                      // ── Allergens ──
-                      SizedBox(height: 24.h),
-                      OnboardingSection(
-                        title: 'Allergens',
-                        hint: 'Tap all that apply — keeps you legally safe.',
-                        icon: Icons.warning_amber_rounded,
-                      ),
-                      MultiChoicePicker(
-                        label: '',
-                        options: _allergenList,
-                        selected: _allergens,
-                        onToggle: (a) => setState(() {
-                          _allergens.contains(a)
-                              ? _allergens.remove(a)
-                              : _allergens.add(a);
-                        }),
-                      ),
-
                       // ── More details (optional, collapsed) ──
                       SizedBox(height: 24.h),
                       _MoreToggle(
                         open: _showMore,
-                        onTap: () =>
-                            setState(() => _showMore = !_showMore),
+                        onTap: () => setState(() => _showMore = !_showMore),
                       ),
                       AnimatedSize(
                         duration: const Duration(milliseconds: 220),
@@ -383,14 +419,17 @@ class _DishEditScreenState extends State<DishEditScreen> {
                                       controller: _portion,
                                       label: 'Portion size',
                                       hint: '2 roti + dal + sabzi + rice',
+                                      textCapitalization:
+                                          TextCapitalization.sentences,
                                     ),
                                     SizedBox(height: 10.h),
                                     PremiumField(
                                       controller: _ingredients,
                                       label: 'Ingredients',
-                                      hint:
-                                          'Wheat, dal, vegetables, spices',
+                                      hint: 'Wheat, dal, vegetables, spices',
                                       maxLines: 3,
+                                      textCapitalization:
+                                          TextCapitalization.sentences,
                                     ),
                                     SizedBox(height: 10.h),
                                     PremiumField(
@@ -399,13 +438,15 @@ class _DishEditScreenState extends State<DishEditScreen> {
                                       hint:
                                           'Home-ground spices, slow-cooked...',
                                       maxLines: 3,
+                                      textCapitalization:
+                                          TextCapitalization.sentences,
                                     ),
                                     SizedBox(height: 14.h),
-                                    _EgglessToggle(
-                                      value: _eggless,
-                                      onChanged: (v) =>
-                                          setState(() => _eggless = v),
-                                    ),
+                                    // _EgglessToggle(
+                                    //   value: _eggless,
+                                    //   onChanged: (v) =>
+                                    //       setState(() => _eggless = v),
+                                    // ),
                                   ],
                                 ),
                               )
@@ -437,14 +478,7 @@ class _DishEditScreenState extends State<DishEditScreen> {
               enabled: _isValid,
               onTap: _isValid ? _save : null,
               onAnyChange: _refresh,
-              listenTo: [
-                _name,
-                _price,
-                _qty,
-                _portion,
-                _ingredients,
-                _shelf,
-              ],
+              listenTo: [_name, _price, _qty, _portion, _ingredients, _shelf],
             ),
           ),
         ],
@@ -476,8 +510,7 @@ class _CircleBtn extends StatelessWidget {
         child: SizedBox(
           width: 42.w,
           height: 42.w,
-          child: Icon(icon,
-              size: 19.sp, color: tint ?? AppColors.ink),
+          child: Icon(icon, size: 19.sp, color: tint ?? AppColors.ink),
         ),
       ),
     );
@@ -518,9 +551,7 @@ class _MoreToggle extends StatelessWidget {
             SizedBox(width: 11.w),
             Expanded(
               child: Text(
-                open
-                    ? 'Hide extra details'
-                    : 'More details (optional)',
+                open ? 'Hide extra details' : 'More details (optional)',
                 style: GoogleFonts.spaceGrotesk(
                   fontSize: 13.5.sp,
                   fontWeight: FontWeight.w700,
@@ -765,8 +796,7 @@ class _StickyCtaState extends State<_StickyCta> {
                         ? null
                         : [
                             BoxShadow(
-                              color:
-                                  AppColors.ink.withValues(alpha: .25),
+                              color: AppColors.ink.withValues(alpha: .25),
                               blurRadius: 18,
                               offset: const Offset(0, 8),
                             ),
@@ -785,8 +815,11 @@ class _StickyCtaState extends State<_StickyCta> {
                         ),
                       ),
                       SizedBox(width: 8.w),
-                      Icon(Icons.check_rounded,
-                          size: 18.sp, color: Colors.white),
+                      Icon(
+                        Icons.check_rounded,
+                        size: 18.sp,
+                        color: Colors.white,
+                      ),
                     ],
                   ),
                 ),

@@ -4,8 +4,10 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shimmer/shimmer.dart';
 
+import '../../../controllers/menu_controller.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/routing/route_names.dart';
+import '../../../models/menu_item.dart';
 import 'dish_edit_screen.dart';
 
 /// Cook · Menu manage (Menu tab).
@@ -22,72 +24,74 @@ class MenuManageScreen extends StatefulWidget {
 }
 
 class _MenuManageScreenState extends State<MenuManageScreen> {
-  // Mutable list so the Live/Paused toggle survives a rebuild.
-  late final List<_DishItem> _dishes = [
-    _DishItem(
-      name: 'Veg Thali',
-      meta: 'Veg · Medium',
-      price: 120,
-      perDay: 20,
-      sold: 8,
-      tint: const Color(0xFFFFD9C8),
-      image:
-          'https://images.unsplash.com/photo-1567188040759-fb8a883dc6d8?w=600&q=80&auto=format&fit=crop',
-      live: true,
-    ),
-    _DishItem(
-      name: 'Rajma Chawal',
-      meta: 'Veg · Mild',
-      price: 90,
-      perDay: 15,
-      sold: 11,
-      tint: const Color(0xFFFBEAC6),
-      image:
-          'https://images.unsplash.com/photo-1631452180519-c014fe946bc7?w=600&q=80&auto=format&fit=crop',
-      live: true,
-    ),
-    _DishItem(
-      name: 'Aloo Paratha',
-      meta: 'Veg · Mild · Eggless',
-      price: 70,
-      perDay: 10,
-      sold: 10,
-      tint: const Color(0xFFD6EEDF),
-      image:
-          'https://images.unsplash.com/photo-1626776876729-bab4369a5a5a?w=600&q=80&auto=format&fit=crop',
-      live: true,
-    ),
-    _DishItem(
-      name: 'Paneer Butter Masala',
-      meta: 'Veg · Medium',
-      price: 140,
-      perDay: 12,
-      sold: 4,
-      tint: const Color(0xFFFFE0E0),
-      image:
-          'https://images.unsplash.com/photo-1631452180519-c014fe946bc7?w=600&q=80&auto=format&fit=crop',
-      live: false,
-    ),
+  // Card background tints, cycled across the grid.
+  static const _tints = [
+    Color(0xFFFFD9C8),
+    Color(0xFFFBEAC6),
+    Color(0xFFD6EEDF),
+    Color(0xFFFFE0E0),
   ];
 
-  void _toggleLive(int i) => setState(() => _dishes[i].live = !_dishes[i].live);
+  List<_DishItem> _dishes = [];
+  bool _loading = true;
 
-  DishDraft _toDraft(_DishItem d) => DishDraft(
-        name: d.name,
-        price: d.price,
-        perDay: d.perDay,
-        portion: '2 roti + dal + sabzi + rice',
-        diet: 'Veg',
-        eggless: true,
-        spice: 'Medium',
-        ingredients: 'Wheat, dal, mixed veg, ghee, spices',
-        shelfLife: '2 hours',
-        allergens: const {'Dairy', 'Gluten'},
-        cookingMedium: 'Refined',
-        description: '',
-        photoUploaded: true,
-        live: d.live,
-      );
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    final items = await MenuApiController.instance.fetchMenus();
+    if (!mounted) return;
+    setState(() {
+      _dishes = [
+        for (var i = 0; i < items.length; i++)
+          _DishItem.fromModel(items[i], _tints[i % _tints.length]),
+      ];
+      _loading = false;
+    });
+  }
+
+  Future<void> _toggleLive(int i) async {
+    final d = _dishes[i];
+    final next = !d.live;
+    setState(() => d.live = next);
+    final ok = await MenuApiController.instance.setAvailability(d.id, next);
+    if (!ok && mounted) setState(() => d.live = !next); // revert on failure
+  }
+
+  /// Open add/edit; refresh the list when something changed.
+  Future<void> _openEditor({DishDraft? draft}) async {
+    final result = await Navigator.pushNamed(
+      context,
+      RouteNames.cookDishEdit,
+      arguments: draft,
+    );
+    if (result != null) _load();
+  }
+
+  DishDraft _toDraft(_DishItem d) {
+    final m = d.model;
+    return DishDraft(
+      id: m.id,
+      imageUrl: m.imageUrl,
+      name: m.name,
+      price: m.price.round(),
+      perDay: m.perDay,
+      portion: m.portion ?? '',
+      diet: m.diet,
+      eggless: m.eggless,
+      spice: m.spice,
+      ingredients: m.ingredients ?? '',
+      shelfLife: '',
+      cookingMedium: '',
+      description: m.description ?? '',
+      photoUploaded: (m.imageUrl ?? '').isNotEmpty,
+      live: m.isAvailable,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -97,100 +101,224 @@ class _MenuManageScreenState extends State<MenuManageScreen> {
       backgroundColor: AppColors.background,
       body: SafeArea(
         bottom: false,
-        child: CustomScrollView(
-          physics: const BouncingScrollPhysics(),
-          slivers: [
-            // ── App bar ──
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(20.w, 10.h, 20.w, 8.h),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Menu',
-                            style: GoogleFonts.spaceGrotesk(
-                              fontSize: 24.sp,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: -.6,
-                              color: AppColors.ink,
+        child: RefreshIndicator(
+          onRefresh: _load,
+          color: AppColors.primary,
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics(),
+            ),
+            slivers: [
+              // ── App bar ──
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(20.w, 10.h, 20.w, 8.h),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Menu',
+                              style: GoogleFonts.spaceGrotesk(
+                                fontSize: 24.sp,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: -.6,
+                                color: AppColors.ink,
+                              ),
                             ),
-                          ),
-                          SizedBox(height: 2.h),
-                          Text(
-                            '$liveCount of ${_dishes.length} dishes live',
-                            style: GoogleFonts.inter(
-                              fontSize: 11.5.sp,
-                              color: AppColors.muted,
-                              fontWeight: FontWeight.w500,
+                            SizedBox(height: 2.h),
+                            Text(
+                              '$liveCount of ${_dishes.length} dishes live',
+                              style: GoogleFonts.inter(
+                                fontSize: 11.5.sp,
+                                color: AppColors.muted,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                    _IconPill(
-                      icon: Icons.today_rounded,
-                      label: 'Today',
-                      onTap: () => Navigator.pushNamed(
-                          context, RouteNames.cookTodaysMenu),
-                    ),
-                    SizedBox(width: 8.w),
-                    _AddDishBtn(
-                      onTap: () => Navigator.pushNamed(
-                          context, RouteNames.cookDishEdit),
-                    ),
-                  ],
+                      // _IconPill(
+                      //   icon: Icons.today_rounded,
+                      //   label: 'Today',
+                      //   onTap: () => Navigator.pushNamed(
+                      //     context,
+                      //     RouteNames.cookTodaysMenu,
+                      //   ),
+                      // ),
+                      // SizedBox(width: 8.w),
+                      _AddDishBtn(onTap: () => _openEditor()),
+                    ],
+                  ),
                 ),
               ),
-            ),
 
-            // ── Section label ──
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(20.w, 18.h, 20.w, 10.h),
-                child: Row(
-                  children: [
-                    Text(
-                      'ALL DISHES',
-                      style: GoogleFonts.spaceGrotesk(
-                        fontSize: 10.5.sp,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1.3,
-                        color: AppColors.muted,
+              // ── Section label ──
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(20.w, 18.h, 20.w, 10.h),
+                  child: Row(
+                    children: [
+                      Text(
+                        'ALL DISHES',
+                        style: GoogleFonts.spaceGrotesk(
+                          fontSize: 10.5.sp,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.3,
+                          color: AppColors.muted,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
 
-            // ── 2-col grid ──
-            SliverPadding(
-              padding: EdgeInsets.fromLTRB(20.w, 0, 20.w, 110.h),
-              sliver: SliverGrid.count(
-                crossAxisCount: 2,
-                mainAxisSpacing: 12.h,
-                crossAxisSpacing: 12.w,
-                childAspectRatio: .68,
-                children: List.generate(_dishes.length, (i) {
-                  final d = _dishes[i];
-                  return _DishCard(
-                    item: d,
-                    onEdit: () => Navigator.pushNamed(
-                      context,
-                      RouteNames.cookDishEdit,
-                      arguments: _toDraft(d),
-                    ),
-                    onToggle: () => _toggleLive(i),
-                  );
-                }),
-              ),
-            ),
-          ],
+              // ── 2-col grid ──
+              if (_loading)
+                const SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (_dishes.isEmpty)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: _EmptyMenu(onAdd: () => _openEditor()),
+                )
+              else
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(20.w, 0, 20.w, 110.h),
+                  sliver: SliverGrid.count(
+                    crossAxisCount: 2,
+                    mainAxisSpacing: 12.h,
+                    crossAxisSpacing: 12.w,
+                    childAspectRatio: .68,
+                    children: List.generate(_dishes.length, (i) {
+                      final d = _dishes[i];
+                      return _DishCard(
+                        item: d,
+                        onEdit: () => _openEditor(draft: _toDraft(d)),
+                        onToggle: () => _toggleLive(i),
+                      );
+                    }),
+                  ),
+                ),
+            ],
+          ),
         ),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  Empty state
+// ══════════════════════════════════════════════════════════════
+
+class _EmptyMenu extends StatelessWidget {
+  const _EmptyMenu({required this.onAdd});
+  final VoidCallback onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(32.w, 0, 32.w, 80.h),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // Illustrative icon stack
+          Container(
+            width: 104.w,
+            height: 104.w,
+            decoration: BoxDecoration(
+              color: AppColors.primarySoft,
+              shape: BoxShape.circle,
+            ),
+            alignment: Alignment.center,
+            child: Container(
+              width: 74.w,
+              height: 74.w,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: Icon(
+                Icons.restaurant_menu_rounded,
+                size: 36.sp,
+                color: AppColors.primary,
+              ),
+            ),
+          ),
+          SizedBox(height: 22.h),
+          Text(
+            'Your menu is empty',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.spaceGrotesk(
+              fontSize: 19.sp,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -.4,
+              color: AppColors.ink,
+            ),
+          ),
+          SizedBox(height: 8.h),
+          Text(
+            'Add your home-cooked dishes so customers\ncan start ordering from your kitchen.',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(
+              fontSize: 13.sp,
+              color: AppColors.muted,
+              height: 1.5,
+            ),
+          ),
+          SizedBox(height: 24.h),
+          // Primary CTA
+          Material(
+            color: AppColors.ink,
+            borderRadius: BorderRadius.circular(99.r),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(99.r),
+              onTap: onAdd,
+              child: Container(
+                padding: EdgeInsets.symmetric(horizontal: 22.w, vertical: 14.h),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(99.r),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.ink.withValues(alpha: .25),
+                      blurRadius: 14,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.add_rounded, size: 18.sp, color: Colors.white),
+                    SizedBox(width: 6.w),
+                    Text(
+                      'Add your first dish',
+                      style: GoogleFonts.spaceGrotesk(
+                        fontSize: 14.sp,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          SizedBox(height: 14.h),
+          Text(
+            'Pull down to refresh',
+            style: GoogleFonts.inter(
+              fontSize: 11.5.sp,
+              color: AppColors.muted.withValues(alpha: .8),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -202,6 +330,7 @@ class _MenuManageScreenState extends State<MenuManageScreen> {
 
 class _DishItem {
   _DishItem({
+    required this.id,
     required this.name,
     required this.meta,
     required this.price,
@@ -210,7 +339,23 @@ class _DishItem {
     required this.tint,
     required this.image,
     required this.live,
+    required this.model,
   });
+
+  factory _DishItem.fromModel(MenuItem m, Color tint) => _DishItem(
+    id: m.id,
+    name: m.name,
+    meta: m.metaLine,
+    price: m.price.round(),
+    perDay: m.perDay,
+    sold: 0, // backend has no sold-count yet
+    tint: tint,
+    image: m.imageUrl ?? '',
+    live: m.isAvailable,
+    model: m,
+  );
+
+  final String id;
   final String name;
   final String meta;
   final int price;
@@ -219,6 +364,7 @@ class _DishItem {
   final Color tint;
   final String image;
   bool live;
+  final MenuItem model;
 
   int get left => (perDay - sold).clamp(0, perDay);
   bool get soldOut => left == 0;
@@ -275,8 +421,11 @@ class _DishCard extends StatelessWidget {
                               errorWidget: (_, _, _) => Container(
                                 color: Colors.black.withValues(alpha: .04),
                                 alignment: Alignment.center,
-                                child: Icon(Icons.restaurant_rounded,
-                                    color: AppColors.muted, size: 30.sp),
+                                child: Icon(
+                                  Icons.restaurant_rounded,
+                                  color: AppColors.muted,
+                                  size: 30.sp,
+                                ),
                               ),
                             ),
                             // Dim overlay when paused — visual cue
@@ -303,10 +452,7 @@ class _DishCard extends StatelessWidget {
                     Positioned(
                       top: 6.h,
                       right: 6.w,
-                      child: _LiveToggle(
-                        live: item.live,
-                        onTap: onToggle,
-                      ),
+                      child: _LiveToggle(live: item.live, onTap: onToggle),
                     ),
 
                     // Bottom-right qty-left badge
@@ -316,15 +462,15 @@ class _DishCard extends StatelessWidget {
                         right: 6.w,
                         child: Container(
                           padding: EdgeInsets.symmetric(
-                              horizontal: 8.w, vertical: 3.h),
+                            horizontal: 8.w,
+                            vertical: 3.h,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.black.withValues(alpha: .62),
                             borderRadius: BorderRadius.circular(99.r),
                           ),
                           child: Text(
-                            item.soldOut
-                                ? 'Sold out'
-                                : '${item.left} left',
+                            item.soldOut ? 'Sold out' : '${item.left} left',
                             style: GoogleFonts.spaceGrotesk(
                               fontSize: 9.5.sp,
                               fontWeight: FontWeight.w700,
@@ -421,23 +567,23 @@ class _StatusPill extends StatelessWidget {
   Widget build(BuildContext context) {
     final (label, dotColor, fg, bg) = switch ((live, soldOut)) {
       (false, _) => (
-          'PAUSED',
-          AppColors.muted,
-          AppColors.inkSoft,
-          Colors.white,
-        ),
+        'PAUSED',
+        AppColors.muted,
+        AppColors.inkSoft,
+        Colors.white,
+      ),
       (true, true) => (
-          'SOLD OUT',
-          AppColors.primary,
-          AppColors.primaryDark,
-          Colors.white,
-        ),
+        'SOLD OUT',
+        AppColors.primary,
+        AppColors.primaryDark,
+        Colors.white,
+      ),
       (true, false) => (
-          'LIVE',
-          AppColors.success,
-          AppColors.secondary,
-          Colors.white,
-        ),
+        'LIVE',
+        AppColors.success,
+        AppColors.secondary,
+        Colors.white,
+      ),
     };
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 7.w, vertical: 3.h),
@@ -458,10 +604,7 @@ class _StatusPill extends StatelessWidget {
           Container(
             width: 6.w,
             height: 6.w,
-            decoration: BoxDecoration(
-              color: dotColor,
-              shape: BoxShape.circle,
-            ),
+            decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
           ),
           SizedBox(width: 5.w),
           Text(
@@ -519,11 +662,7 @@ class _EditBtn extends StatelessWidget {
         child: SizedBox(
           width: 30.w,
           height: 30.w,
-          child: Icon(
-            Icons.edit_rounded,
-            color: Colors.white,
-            size: 14.sp,
-          ),
+          child: Icon(Icons.edit_rounded, color: Colors.white, size: 14.sp),
         ),
       ),
     );

@@ -13,6 +13,12 @@ class OnboardingProvider extends ChangeNotifier {
   String _phone = '';
   int _tier = 1;
 
+  // Step 1: Store Profile & Branding
+  String _kitchenName = '';
+  String _about = '';
+  String _bannerUrl = '';
+  List<String> _cuisines = [];
+
   // Step 2: Identity & KYC
   String _selfieUrl = '';
   String _name = '';
@@ -24,21 +30,23 @@ class OnboardingProvider extends ChangeNotifier {
   String _panNo = '';
   String _panUrl = '';
 
-  // Step 3: Kitchen & Safety
-  String _cookingUrl = '';
-  String _storageUrl = '';
-  String _sinkUrl = '';
+  // Step 3: Location & FSSAI
   double _lat = 17.4451;
   double _lng = 78.3502;
   bool _isVegOnly = false;
   String _address = '';
+  String _streetAddress = '';
+  String _landmark = '';
+  String _city = '';
+  String _state = '';
+  String _pincode = '';
 
-  // Step 3b: FSSAI Assist
   bool _hasExistingFssai = false;
   String _fssaiNumber = '';
   String _fssaiExpiry = '';
+  String _fssaiUrl = '';
 
-  // Step 5: Operations & Consents
+  // Step 4: Operations & Consents
   bool _mealBreakfast = false;
   bool _mealLunch = true;
   bool _mealDinner = true;
@@ -57,6 +65,14 @@ class OnboardingProvider extends ChangeNotifier {
   // --- Getters ---
   String get phone => _phone;
   int get tier => _tier;
+  
+  // Step 1 Getters
+  String get kitchenName => _kitchenName;
+  String get about => _about;
+  String get bannerUrl => _bannerUrl;
+  List<String> get cuisines => _cuisines;
+
+  // Step 2 Getters
   String get selfieUrl => _selfieUrl;
   String get name => _name;
   String get dob => _dob;
@@ -66,16 +82,24 @@ class OnboardingProvider extends ChangeNotifier {
   String get aadhaarUrl => _aadhaarUrl;
   String get panNo => _panNo;
   String get panUrl => _panUrl;
-  String get cookingUrl => _cookingUrl;
-  String get storageUrl => _storageUrl;
-  String get sinkUrl => _sinkUrl;
+
+  // Step 3 Getters
   double get lat => _lat;
   double get lng => _lng;
   bool get isVegOnly => _isVegOnly;
   String get address => _address;
+  String get streetAddress => _streetAddress;
+  String get landmark => _landmark;
+  String get city => _city;
+  String get state => _state;
+  String get pincode => _pincode;
+
   bool get hasExistingFssai => _hasExistingFssai;
   String get fssaiNumber => _fssaiNumber;
   String get fssaiExpiry => _fssaiExpiry;
+  String get fssaiUrl => _fssaiUrl;
+
+  // Step 4 Getters
   bool get mealBreakfast => _mealBreakfast;
   bool get mealLunch => _mealLunch;
   bool get mealDinner => _mealDinner;
@@ -129,6 +153,14 @@ class OnboardingProvider extends ChangeNotifier {
     bool? consentTnC,
     bool? consentPhotos,
     String? address,
+    String? kitchenName,
+    String? about,
+    List<String>? cuisines,
+    String? streetAddress,
+    String? landmark,
+    String? city,
+    String? state,
+    String? pincode,
   }) {
     if (name != null) _name = name;
     if (dob != null) _dob = dob;
@@ -154,6 +186,25 @@ class OnboardingProvider extends ChangeNotifier {
     if (consentHygiene != null) _consentHygiene = consentHygiene;
     if (consentTnC != null) _consentTnC = consentTnC;
     if (consentPhotos != null) _consentPhotos = consentPhotos;
+    if (kitchenName != null) _kitchenName = kitchenName;
+    if (about != null) _about = about;
+    if (cuisines != null) _cuisines = cuisines;
+    if (streetAddress != null) _streetAddress = streetAddress;
+    if (landmark != null) _landmark = landmark;
+    if (city != null) _city = city;
+    if (state != null) _state = state;
+    if (pincode != null) _pincode = pincode;
+
+    if (streetAddress != null || landmark != null || city != null || state != null || pincode != null) {
+      final parts = <String>[];
+      if (_streetAddress.isNotEmpty) parts.add(_streetAddress);
+      if (_landmark.isNotEmpty) parts.add(_landmark);
+      if (_city.isNotEmpty) parts.add(_city);
+      if (_state.isNotEmpty) parts.add(_state);
+      if (_pincode.isNotEmpty) parts.add(_pincode);
+      _address = parts.join(', ');
+    }
+
     notifyListeners();
   }
 
@@ -183,14 +234,11 @@ class OnboardingProvider extends ChangeNotifier {
           case 'pan':
             _panUrl = url;
             break;
-          case 'cooking':
-            _cookingUrl = url;
+          case 'banner':
+            _bannerUrl = url;
             break;
-          case 'storage':
-            _storageUrl = url;
-            break;
-          case 'sink':
-            _sinkUrl = url;
+          case 'fssai':
+            _fssaiUrl = url;
             break;
           default:
             break;
@@ -245,11 +293,18 @@ class OnboardingProvider extends ChangeNotifier {
         'selfieUrl': _selfieUrl,
         'aadhaarUrl': _aadhaarUrl,
         'panUrl': _panUrl,
-        'cookingUrl': _cookingUrl,
-        'storageUrl': _storageUrl,
-        'sinkUrl': _sinkUrl,
         'fcmToken': fcmToken,
         'address': _address,
+        'kitchenName': _kitchenName,
+        'about': _about,
+        'bannerUrl': _bannerUrl,
+        'cuisines': jsonStringify(_cuisines),
+        'streetAddress': _streetAddress,
+        'landmark': _landmark,
+        'city': _city,
+        'state': _state,
+        'pincode': _pincode,
+        'fssaiUrl': _fssaiUrl,
       };
 
       AppLogger.i('Submitting cook onboarding registration...');
@@ -300,6 +355,11 @@ class OnboardingProvider extends ChangeNotifier {
     }
   }
 
+  // --- Helper to pass list of cuisines to JSON string if needed ---
+  String jsonStringify(List<String> list) {
+    return '["${list.join('","')}"]';
+  }
+
   // --- Clear Document ---
   void clearDocument(String docType) {
     switch (docType) {
@@ -312,14 +372,11 @@ class OnboardingProvider extends ChangeNotifier {
       case 'pan':
         _panUrl = '';
         break;
-      case 'cooking':
-        _cookingUrl = '';
+      case 'banner':
+        _bannerUrl = '';
         break;
-      case 'storage':
-        _storageUrl = '';
-        break;
-      case 'sink':
-        _sinkUrl = '';
+      case 'fssai':
+        _fssaiUrl = '';
         break;
       default:
         break;

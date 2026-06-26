@@ -26,7 +26,7 @@ class _CookDashboardScreenState extends State<CookDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      // backgroundColor: AppColors.background,
       body: Stack(
         children: [
           // Gradient backdrop behind the header — fades into the page.
@@ -111,12 +111,11 @@ class _CookDashboardScreenState extends State<CookDashboardScreen> {
                     tint: AppColors.secondary,
                     title: '1 order ready for pickup',
                     sub: 'Rider on the way — share OTP',
-                    onTap: () => Navigator.pushNamed(
-                        context, RouteNames.cookFoodReady),
+                    onTap: () =>
+                        Navigator.pushNamed(context, RouteNames.cookFoodReady),
                   ),
                   SizedBox(height: 24.h),
-                  _SectionHeader(
-                      kicker: "TODAY'S PULSE", title: 'At a glance'),
+                  _SectionHeader(kicker: "TODAY'S PULSE", title: 'At a glance'),
                   SizedBox(height: 12.h),
                   Row(
                     children: [
@@ -172,7 +171,9 @@ class _CookDashboardScreenState extends State<CookDashboardScreen> {
                     trailingPill: '2 new',
                     trailingAction: 'See all',
                     onTrailingAction: () => Navigator.pushNamed(
-                        context, RouteNames.cookOrderHistory),
+                      context,
+                      RouteNames.cookOrderHistory,
+                    ),
                   ),
                   SizedBox(height: 12.h),
                   _OrderCard(
@@ -211,16 +212,13 @@ class _CookDashboardScreenState extends State<CookDashboardScreen> {
                     price: 140,
                     elapsed: 'Cooking · 12 min left',
                     accepted: true,
-                    onAccept: () => Navigator.pushNamed(
-                        context, RouteNames.cookFoodReady),
+                    onAccept: () =>
+                        Navigator.pushNamed(context, RouteNames.cookFoodReady),
                   ),
                 ]
-
                 // ── CLOSED state: calm summary + open CTA ──
                 else ...[
-                  _ClosedSummary(
-                    onOpen: () => setState(() => _open = true),
-                  ),
+                  _ClosedSummary(onOpen: () => setState(() => _open = true)),
                 ],
 
                 SizedBox(height: 24.h),
@@ -1497,8 +1495,11 @@ class _ClosedSummary extends StatelessWidget {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.power_settings_new_rounded,
-                                size: 17.sp, color: Colors.white),
+                            Icon(
+                              Icons.power_settings_new_rounded,
+                              size: 17.sp,
+                              color: Colors.white,
+                            ),
                             SizedBox(width: 8.w),
                             Text(
                               'Open kitchen',
@@ -1551,8 +1552,11 @@ class _ClosedSummary extends StatelessWidget {
                     ),
                   ),
                   const Spacer(),
-                  Icon(Icons.history_rounded,
-                      size: 15.sp, color: AppColors.muted),
+                  Icon(
+                    Icons.history_rounded,
+                    size: 15.sp,
+                    color: AppColors.muted,
+                  ),
                 ],
               ),
               SizedBox(height: 10.h),

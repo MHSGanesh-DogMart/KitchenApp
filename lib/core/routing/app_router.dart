@@ -6,7 +6,6 @@ import '../../presentation/screens/auth/login_screen.dart';
 import '../../presentation/screens/auth/splash_screen.dart' as auth_splash;
 
 // Cook side — onboarding
-import '../../presentation/screens/cook/onboarding/fssai_assist_screen.dart';
 import '../../presentation/screens/cook/onboarding/go_live_screen.dart';
 import '../../presentation/screens/cook/onboarding/identity_screen.dart';
 import '../../presentation/screens/cook/onboarding/kitchen_safety_screen.dart';
@@ -21,6 +20,7 @@ import '../../presentation/screens/cook/cook_tab_shell.dart';
 import '../../presentation/screens/cook/dish_edit_screen.dart';
 import '../../presentation/screens/cook/food_ready_screen.dart';
 import '../../presentation/screens/cook/incoming_order_screen.dart';
+import '../../presentation/screens/cook/kitchen_profile_details_screen.dart';
 import '../../presentation/screens/cook/order_history_screen.dart';
 import '../../presentation/screens/cook/reviews_screen.dart';
 import '../../presentation/screens/cook/todays_menu_screen.dart';
@@ -64,8 +64,6 @@ class AppRouter {
         return _page(const CookIdentityScreen(), settings);
       case RouteNames.cookKitchenSafety:
         return _page(const CookKitchenSafetyScreen(), settings);
-      case RouteNames.cookFssai:
-        return _page(const CookFssaiAssistScreen(), settings);
       case RouteNames.cookOperations:
         return _page(const CookOperationsScreen(), settings);
       case RouteNames.cookGoLive:
@@ -87,8 +85,8 @@ class AppRouter {
         return _page(const IncomingOrderScreen(), settings);
       case RouteNames.cookFoodReady:
         return _page(const FoodReadyScreen(), settings);
-      case RouteNames.cookTodaysMenu:
-        return _page(const TodaysMenuScreen(), settings);
+      // case RouteNames.cookTodaysMenu:
+      //   return _page(const TodaysMenuScreen(), settings);
       case RouteNames.cookDishEdit:
         final draft = settings.arguments as DishDraft?;
         return _page(DishEditScreen(initial: draft), settings);
@@ -98,6 +96,8 @@ class AppRouter {
         return _page(const CookReviewsScreen(), settings);
       case RouteNames.cookNotifications:
         return _page(const CookNotificationsScreen(), settings);
+      case RouteNames.cookProfileDetails:
+        return _page(const KitchenProfileDetailsScreen(), settings);
       case RouteNames.cookHelp:
         return _page(const CookHelpScreen(), settings);
 

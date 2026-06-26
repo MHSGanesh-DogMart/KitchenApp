@@ -28,8 +28,8 @@ class CookGoLiveScreen extends StatelessWidget {
     final provider = Provider.of<OnboardingProvider>(context);
 
     return OnboardingScaffold(
-      step: 5,
-      totalSteps: 5,
+      step: 4,
+      totalSteps: 4,
       kicker: 'All set',
       title: 'You are ready\nto go live ✨',
       subtitle:
@@ -53,20 +53,25 @@ class CookGoLiveScreen extends StatelessWidget {
         ),
         _ChecklistGroup(items: [
           _Item(
+            icon: Icons.storefront_outlined,
+            title: 'Storefront & Branding',
+            value: '${provider.kitchenName} · Banner & ${provider.cuisines.length} cuisines selected',
+          ),
+          _Item(
             icon: Icons.person_outline_rounded,
             title: 'Identity & KYC',
             value: '${provider.name} · Selfie, Aadhaar & PAN uploaded',
           ),
           _Item(
             icon: Icons.home_work_outlined,
-            title: 'Kitchen & food safety',
-            value: '${provider.isVegOnly ? "100% Vegetarian" : "Standard Kitchen"} · Photos & Location pinned',
+            title: 'Location & Address',
+            value: '${provider.isVegOnly ? "100% Vegetarian" : "Standard Kitchen"} · ${provider.city}, ${provider.state} · GPS pinned',
           ),
           _Item(
             icon: Icons.verified_user_outlined,
             title: 'FSSAI Status',
             value: provider.hasExistingFssai
-                ? 'Existing FSSAI: ${provider.fssaiNumber}'
+                ? 'Existing FSSAI: ${provider.fssaiNumber} (Expiry: ${provider.fssaiExpiry})'
                 : 'FSSAI Basic filing registration (~₹100/yr)',
           ),
           _Item(

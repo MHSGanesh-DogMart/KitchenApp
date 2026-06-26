@@ -43,6 +43,7 @@ class RouteNames {
   static const String cookEarnings = '/cook/earnings';
   static const String cookNotifications = '/cook/notifications';
   static const String cookSettings = '/cook/settings';
+  static const String cookProfileDetails = '/cook/profile-details';
   static const String cookHelp = '/cook/help';
 
   // ── Settings sub (kept from customer side, used by cook too) ──

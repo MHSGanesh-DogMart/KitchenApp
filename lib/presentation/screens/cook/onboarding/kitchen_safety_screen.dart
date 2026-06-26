@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -10,7 +11,7 @@ import '../../../../core/services/toast_service.dart';
 import '../../../../providers/onboarding_provider.dart';
 import '_onboarding_widgets.dart';
 
-/// Cook · Kitchen & Food Safety (3 of 6).
+/// Cook · Location & FSSAI details (3 of 4).
 class CookKitchenSafetyScreen extends StatefulWidget {
   const CookKitchenSafetyScreen({super.key});
   @override
@@ -19,179 +20,158 @@ class CookKitchenSafetyScreen extends StatefulWidget {
 }
 
 class _CookKitchenSafetyScreenState extends State<CookKitchenSafetyScreen> {
-  bool _cooking = false;
-  bool _storage = false;
-  bool _sink = false;
   bool _gps = true;
   bool _vegOnly = false;
+  bool _hasExistingFssai = false;
 
-  bool _uploadingCooking = false;
-  bool _uploadingStorage = false;
-  bool _uploadingSink = false;
+  final _streetCtrl = TextEditingController();
+  final _landmarkCtrl = TextEditingController();
+  final _cityCtrl = TextEditingController();
+  final _stateCtrl = TextEditingController();
+  final _pincodeCtrl = TextEditingController();
 
-  final _addressController = TextEditingController();
+  final _fssaiNoCtrl = TextEditingController();
+  final _fssaiExpiryCtrl = TextEditingController();
+
+  bool _uploadingFssai = false;
+  bool _fssaiUploaded = false;
 
   @override
   void initState() {
     super.initState();
     final p = Provider.of<OnboardingProvider>(context, listen: false);
-    _cooking = p.cookingUrl.isNotEmpty;
-    _storage = p.storageUrl.isNotEmpty;
-    _sink = p.sinkUrl.isNotEmpty;
     _vegOnly = p.isVegOnly;
-    _addressController.text = p.address;
+    _streetCtrl.text = p.streetAddress;
+    _landmarkCtrl.text = p.landmark;
+    _cityCtrl.text = p.city;
+    _stateCtrl.text = p.state;
+    _pincodeCtrl.text = p.pincode;
+    
+    _hasExistingFssai = p.hasExistingFssai;
+    _fssaiNoCtrl.text = p.fssaiNumber;
+    _fssaiExpiryCtrl.text = p.fssaiExpiry;
+    _fssaiUploaded = p.fssaiUrl.isNotEmpty;
   }
 
   @override
   void dispose() {
-    _addressController.dispose();
+    _streetCtrl.dispose();
+    _landmarkCtrl.dispose();
+    _cityCtrl.dispose();
+    _stateCtrl.dispose();
+    _pincodeCtrl.dispose();
+    _fssaiNoCtrl.dispose();
+    _fssaiExpiryCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _pickAndUpload(String docType) async {
-    final provider = Provider.of<OnboardingProvider>(context, listen: false);
-    final file = await ImagePickerService.pickFromSheet();
-    if (file == null) return;
-
-    setState(() {
-      if (docType == 'cooking') _uploadingCooking = true;
-      if (docType == 'storage') _uploadingStorage = true;
-      if (docType == 'sink') _uploadingSink = true;
-    });
-
-    final ok = await provider.uploadDocument(docType, file);
-
-    if (mounted) {
+  Future<void> _pickFssaiExpiry() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: now.add(const Duration(days: 365)),
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 365 * 5)),
+      helpText: 'FSSAI License Expiry Date',
+    );
+    if (picked != null) {
       setState(() {
-        if (docType == 'cooking') {
-          _uploadingCooking = false;
-          _cooking = ok;
-        }
-        if (docType == 'storage') {
-          _uploadingStorage = false;
-          _storage = ok;
-        }
-        if (docType == 'sink') {
-          _uploadingSink = false;
-          _sink = ok;
-        }
+        _fssaiExpiryCtrl.text = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
       });
-      if (ok) {
-        ToastService.success('${docType[0].toUpperCase()}${docType.substring(1)} photo uploaded successfully.');
-      }
     }
   }
 
-  void _clearDocument(String docType) {
+  Future<void> _pickAndUploadFssai() async {
     final provider = Provider.of<OnboardingProvider>(context, listen: false);
-    provider.clearDocument(docType);
-    setState(() {
-      if (docType == 'cooking') _cooking = false;
-      if (docType == 'storage') _storage = false;
-      if (docType == 'sink') _sink = false;
-    });
-    ToastService.success('${docType[0].toUpperCase()}${docType.substring(1)} photo removed.');
+    final file = await ImagePickerService.pickFromSheet();
+    if (file == null) return;
+    setState(() => _uploadingFssai = true);
+    final ok = await provider.uploadDocument('fssai', file);
+    if (mounted) {
+      setState(() {
+        _uploadingFssai = false;
+        _fssaiUploaded = ok;
+      });
+      if (ok) ToastService.success('FSSAI Certificate uploaded.');
+    }
+  }
+
+  void _clearFssai() {
+    Provider.of<OnboardingProvider>(context, listen: false).clearDocument('fssai');
+    setState(() => _fssaiUploaded = false);
+    ToastService.success('FSSAI Certificate removed.');
   }
 
   void _onContinue() {
     final p = Provider.of<OnboardingProvider>(context, listen: false);
-    if (p.cookingUrl.isEmpty) {
-      ToastService.error('Cooking area photo is required.');
-      return;
-    }
-    if (p.storageUrl.isEmpty) {
-      ToastService.error('Storage / fridge photo is required.');
-      return;
-    }
-    if (p.sinkUrl.isEmpty) {
-      ToastService.error('Sink / washing area photo is required.');
-      return;
-    }
+    
     if (!_gps) {
       ToastService.error('Please pin your kitchen location.');
       return;
     }
-    if (_addressController.text.trim().isEmpty) {
-      ToastService.error('Kitchen address is required.');
+    if (_streetCtrl.text.trim().isEmpty) {
+      ToastService.error('Street address is required.');
       return;
+    }
+    if (_cityCtrl.text.trim().isEmpty) {
+      ToastService.error('City is required.');
+      return;
+    }
+    if (_stateCtrl.text.trim().isEmpty) {
+      ToastService.error('State is required.');
+      return;
+    }
+    if (_pincodeCtrl.text.trim().length != 6) {
+      ToastService.error('Valid 6-digit Pincode is required.');
+      return;
+    }
+
+    if (_hasExistingFssai) {
+      if (_fssaiNoCtrl.text.trim().length != 14) {
+        ToastService.error('Valid 14-digit FSSAI License Number is required.');
+        return;
+      }
+      if (_fssaiExpiryCtrl.text.trim().isEmpty) {
+        ToastService.error('FSSAI Expiry Date is required.');
+        return;
+      }
+      if (p.fssaiUrl.isEmpty) {
+        ToastService.error('Please upload your FSSAI Certificate photo.');
+        return;
+      }
     }
 
     p.updateField(
       isVegOnly: _vegOnly,
       lat: 17.4451,
       lng: 78.3502,
-      address: _addressController.text.trim(),
+      streetAddress: _streetCtrl.text.trim(),
+      landmark: _landmarkCtrl.text.trim(),
+      city: _cityCtrl.text.trim(),
+      state: _stateCtrl.text.trim(),
+      pincode: _pincodeCtrl.text.trim(),
+      hasExistingFssai: _hasExistingFssai,
+      fssaiNumber: _hasExistingFssai ? _fssaiNoCtrl.text.trim() : '',
+      fssaiExpiry: _hasExistingFssai ? _fssaiExpiryCtrl.text.trim() : '',
     );
 
-    Navigator.pushNamed(context, RouteNames.cookFssai);
+    Navigator.pushNamed(context, RouteNames.cookOperations);
   }
 
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<OnboardingProvider>(context);
+
     return OnboardingScaffold(
       step: 3,
-      totalSteps: 5,
-      kicker: 'Your kitchen',
-      title: 'Show off your\nkitchen',
-      subtitle:
-          'Real photos build trust. Customers want to see where their food is cooked.',
+      totalSteps: 4,
+      kicker: 'Location & FSSAI',
+      title: 'Kitchen location\n& FSSAI license',
+      subtitle: 'Where is your kitchen located, and what is your FSSAI license status?',
       gradient: const [Color(0xFFE1F2EC), Color(0xFFCFE9DC), Color(0xFFF1F8F4)],
-      ctaLabel: 'Continue to FSSAI',
+      ctaLabel: 'Continue to Operations',
       onCta: _onContinue,
       body: [
-        OnboardingSection(
-          title: 'Kitchen photos',
-          hint: 'All 3 required · shoot in daylight',
-          icon: Icons.camera_alt_outlined,
-        ),
-        Row(
-          children: [
-            Expanded(
-              child: UploadTile(
-                style: UploadStyle.square,
-                title: 'Cooking area',
-                helper: _uploadingCooking ? 'Uploading...' : '',
-                icon: Icons.local_fire_department_outlined,
-                uploaded: _cooking,
-                required: true,
-                imageUrl: provider.cookingUrl,
-                onTap: () => _pickAndUpload('cooking'),
-                onRemove: () => _clearDocument('cooking'),
-              ),
-            ),
-            SizedBox(width: 10.w),
-            Expanded(
-              child: UploadTile(
-                style: UploadStyle.square,
-                title: 'Storage /\nfridge',
-                helper: _uploadingStorage ? 'Uploading...' : '',
-                icon: Icons.kitchen_outlined,
-                uploaded: _storage,
-                required: true,
-                imageUrl: provider.storageUrl,
-                onTap: () => _pickAndUpload('storage'),
-                onRemove: () => _clearDocument('storage'),
-              ),
-            ),
-            SizedBox(width: 10.w),
-            Expanded(
-              child: UploadTile(
-                style: UploadStyle.square,
-                title: 'Sink /\nwashing',
-                helper: _uploadingSink ? 'Uploading...' : '',
-                icon: Icons.water_drop_outlined,
-                uploaded: _sink,
-                required: true,
-                imageUrl: provider.sinkUrl,
-                onTap: () => _pickAndUpload('sink'),
-                onRemove: () => _clearDocument('sink'),
-              ),
-            ),
-          ],
-        ),
-
-        SizedBox(height: 26.h),
         OnboardingSection(
           title: 'Pin your location',
           hint: 'Helps delivery partners reach you fast.',
@@ -201,40 +181,189 @@ class _CookKitchenSafetyScreenState extends State<CookKitchenSafetyScreen> {
 
         SizedBox(height: 26.h),
         OnboardingSection(
-          title: 'Kitchen Address',
-          hint: 'House/Flat number, Building, Street, Area',
+          title: 'Structured Address',
+          hint: 'Enter your complete address details.',
           icon: Icons.home_outlined,
         ),
-        TextFormField(
-          controller: _addressController,
-          maxLines: 2,
-          decoration: InputDecoration(
-            hintText: 'Enter your complete kitchen address',
-            hintStyle: GoogleFonts.inter(
-              fontSize: 13.5.sp,
-              color: AppColors.muted,
-            ),
-            filled: true,
-            fillColor: AppColors.surface,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16.r),
-              borderSide: const BorderSide(color: AppColors.line),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16.r),
-              borderSide: const BorderSide(color: AppColors.line),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16.r),
-              borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
-            ),
-            contentPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
-          ),
-          style: GoogleFonts.inter(
-            fontSize: 14.sp,
-            color: AppColors.ink,
-          ),
+        PremiumField(
+          controller: _streetCtrl,
+          label: 'House No, Building & Street',
+          hint: 'Flat 402, Lotus Heights, Outer Ring Road',
+          required: true,
+          textCapitalization: TextCapitalization.words,
         ),
+        SizedBox(height: 10.h),
+        PremiumField(
+          controller: _landmarkCtrl,
+          label: 'Landmark (Optional)',
+          hint: 'e.g. Near HDFC Bank ATM',
+          textCapitalization: TextCapitalization.words,
+        ),
+        SizedBox(height: 10.h),
+        Row(
+          children: [
+            Expanded(
+              child: PremiumField(
+                controller: _cityCtrl,
+                label: 'City',
+                hint: 'Hyderabad',
+                required: true,
+                textCapitalization: TextCapitalization.words,
+              ),
+            ),
+            SizedBox(width: 10.w),
+            Expanded(
+              child: PremiumField(
+                controller: _stateCtrl,
+                label: 'State',
+                hint: 'Telangana',
+                required: true,
+                textCapitalization: TextCapitalization.words,
+              ),
+            ),
+          ],
+        ),
+        SizedBox(height: 10.h),
+        PremiumField(
+          controller: _pincodeCtrl,
+          label: 'Pincode',
+          hint: '6 digits',
+          keyboardType: TextInputType.number,
+          required: true,
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(6),
+          ],
+        ),
+
+        SizedBox(height: 26.h),
+        OnboardingSection(
+          title: 'FSSAI License status',
+          hint: 'Select your current FSSAI status.',
+          icon: Icons.verified_user_outlined,
+        ),
+        Row(
+          children: [
+            Expanded(
+              child: InkWell(
+                onTap: () => setState(() => _hasExistingFssai = false),
+                borderRadius: BorderRadius.circular(16.r),
+                child: Container(
+                  padding: EdgeInsets.symmetric(vertical: 14.h, horizontal: 12.w),
+                  decoration: BoxDecoration(
+                    color: !_hasExistingFssai ? AppColors.secondarySoft : AppColors.surface,
+                    border: Border.all(
+                      color: !_hasExistingFssai ? AppColors.secondary : AppColors.line,
+                      width: !_hasExistingFssai ? 1.4 : 1,
+                    ),
+                    borderRadius: BorderRadius.circular(16.r),
+                  ),
+                  child: Column(
+                    children: [
+                      Text('🎟️', style: TextStyle(fontSize: 22.sp)),
+                      SizedBox(height: 6.h),
+                      Text(
+                        'Apply for Basic',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.spaceGrotesk(
+                          fontSize: 12.sp,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.ink,
+                        ),
+                      ),
+                      SizedBox(height: 2.h),
+                      Text(
+                        'We register you (~₹100/yr)',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.inter(
+                          fontSize: 10.sp,
+                          color: AppColors.muted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            SizedBox(width: 10.w),
+            Expanded(
+              child: InkWell(
+                onTap: () => setState(() => _hasExistingFssai = true),
+                borderRadius: BorderRadius.circular(16.r),
+                child: Container(
+                  padding: EdgeInsets.symmetric(vertical: 14.h, horizontal: 12.w),
+                  decoration: BoxDecoration(
+                    color: _hasExistingFssai ? AppColors.secondarySoft : AppColors.surface,
+                    border: Border.all(
+                      color: _hasExistingFssai ? AppColors.secondary : AppColors.line,
+                      width: _hasExistingFssai ? 1.4 : 1,
+                    ),
+                    borderRadius: BorderRadius.circular(16.r),
+                  ),
+                  child: Column(
+                    children: [
+                      Text('📜', style: TextStyle(fontSize: 22.sp)),
+                      SizedBox(height: 6.h),
+                      Text(
+                        'I have a license',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.spaceGrotesk(
+                          fontSize: 12.sp,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.ink,
+                        ),
+                      ),
+                      SizedBox(height: 2.h),
+                      Text(
+                        'Enter number & upload cert',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.inter(
+                          fontSize: 10.sp,
+                          color: AppColors.muted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (_hasExistingFssai) ...[
+          SizedBox(height: 16.h),
+          PremiumField(
+            controller: _fssaiNoCtrl,
+            label: 'FSSAI License number',
+            hint: '14 digits',
+            keyboardType: TextInputType.number,
+            required: true,
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(14),
+            ],
+          ),
+          SizedBox(height: 10.h),
+          PremiumField(
+            controller: _fssaiExpiryCtrl,
+            label: 'FSSAI Expiry date',
+            hint: 'YYYY-MM-DD',
+            readOnly: true,
+            onTap: _pickFssaiExpiry,
+            suffixIcon: Icons.calendar_today_rounded,
+            required: true,
+          ),
+          SizedBox(height: 10.h),
+          UploadTile(
+            title: 'FSSAI Certificate photo',
+            helper: _uploadingFssai ? 'Uploading...' : 'Clear photo of license certificate',
+            icon: Icons.cloud_upload_outlined,
+            uploaded: _fssaiUploaded,
+            required: true,
+            imageUrl: provider.fssaiUrl,
+            onTap: _pickAndUploadFssai,
+            onRemove: _clearFssai,
+          ),
+        ],
 
         SizedBox(height: 26.h),
         OnboardingSection(

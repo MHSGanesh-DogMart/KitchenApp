@@ -12,24 +12,53 @@ import '../../../../core/services/toast_service.dart';
 void handleStatusNavigation(BuildContext context, String status) {
   if (!context.mounted) return;
   switch (status) {
+    case 'Verified':
+    case 'ACTIVE':
+    case 'Active':
+    case 'Kitchen_Active':
     case 'Kitchen_Approved':
-      Navigator.pushNamedAndRemoveUntil(context, RouteNames.cookDashboard, (_) => false);
+      // Approved / verified / live kitchen → go straight to the home dashboard
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        RouteNames.cookDashboard,
+        (_) => false,
+      );
       break;
     case 'Kitchen_Pending':
-      Navigator.pushNamedAndRemoveUntil(context, RouteNames.cookPending, (_) => false);
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        RouteNames.cookPending,
+        (_) => false,
+      );
       break;
     case 'Kitchen_Rejected':
-      Navigator.pushNamedAndRemoveUntil(context, RouteNames.cookRejected, (_) => false);
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        RouteNames.cookRejected,
+        (_) => false,
+      );
       break;
     case 'Fssai_Awaiting':
-      Navigator.pushNamedAndRemoveUntil(context, RouteNames.cookFssaiAwaiting, (_) => false);
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        RouteNames.cookFssaiAwaiting,
+        (_) => false,
+      );
       break;
     case 'Fssai_Approved':
       // FSSAI approved but general kitchen approval might still be pending
-      Navigator.pushNamedAndRemoveUntil(context, RouteNames.cookPending, (_) => false);
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        RouteNames.cookPending,
+        (_) => false,
+      );
       break;
     default:
-      Navigator.pushNamedAndRemoveUntil(context, RouteNames.login, (_) => false);
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        RouteNames.login,
+        (_) => false,
+      );
       break;
   }
 }
@@ -65,7 +94,8 @@ class _KitchenPendingScreenState extends State<KitchenPendingScreen> {
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context, listen: false);
     return Scaffold(
-      backgroundColor: AppColors.background,
+      // backgroundColor: AppColors.background,
+      // appBar: AppBar(backgroundColor: AppColors.background),
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
@@ -76,7 +106,7 @@ class _KitchenPendingScreenState extends State<KitchenPendingScreen> {
         ),
         child: SafeArea(
           child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 24.w),
+            padding: EdgeInsets.symmetric(horizontal: 24.h),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -141,7 +171,10 @@ class _KitchenPendingScreenState extends State<KitchenPendingScreen> {
                       ? SizedBox(
                           width: 20.w,
                           height: 20.w,
-                          child: const CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                          child: const CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
                         )
                       : Text(
                           'Refresh Status',
@@ -243,7 +276,9 @@ class KitchenRejectedScreen extends StatelessWidget {
                 const Spacer(),
                 ElevatedButton(
                   onPressed: () {
-                    ToastService.success('Support ticket created. We will call you shortly!');
+                    ToastService.success(
+                      'Support ticket created. We will call you shortly!',
+                    );
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
@@ -391,7 +426,10 @@ class _FssaiAwaitingScreenState extends State<FssaiAwaitingScreen> {
                       ? SizedBox(
                           width: 20.w,
                           height: 20.w,
-                          child: const CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                          child: const CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
                         )
                       : Text(
                           'Refresh Status',

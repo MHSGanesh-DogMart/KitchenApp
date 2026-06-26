@@ -168,7 +168,7 @@ class _CookIdentityScreenState extends State<CookIdentityScreen> {
     final provider = Provider.of<OnboardingProvider>(context);
     return OnboardingScaffold(
       step: 2,
-      totalSteps: 5,
+      totalSteps: 4,
       kicker: 'Identity',
       title: "Let's verify\nit's you",
       subtitle:
@@ -209,6 +209,7 @@ class _CookIdentityScreenState extends State<CookIdentityScreen> {
           label: 'Full name (as on Aadhaar)',
           hint: 'Sunita Sharma',
           required: true,
+          textCapitalization: TextCapitalization.words,
         ),
         SizedBox(height: 10.h),
         PremiumField(

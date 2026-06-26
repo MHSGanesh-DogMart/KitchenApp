@@ -105,7 +105,7 @@ class _CookOperationsScreenState extends State<CookOperationsScreen> {
   Widget build(BuildContext context) {
     return OnboardingScaffold(
       step: 4,
-      totalSteps: 5,
+      totalSteps: 4,
       kicker: 'Operations',
       title: 'How you\nwork',
       subtitle:

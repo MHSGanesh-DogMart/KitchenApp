@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
-
 import 'package:provider/provider.dart';
+
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/routing/route_names.dart';
+import '../../../../core/services/image_picker_service.dart';
+import '../../../../core/services/toast_service.dart';
+import '../../../../core/network/api_client.dart';
+import '../../../../core/config/api_endpoints.dart';
+import '../../../../core/utils/logger.dart';
 import '../../../../providers/onboarding_provider.dart';
 import '_onboarding_widgets.dart';
 
-/// Cook onboarding · Choose tier (1 of 6).
+/// Cook onboarding · Choose tier & Branding profile (1 of 4).
 class CookTierScreen extends StatefulWidget {
   const CookTierScreen({super.key});
   @override
@@ -17,248 +22,347 @@ class CookTierScreen extends StatefulWidget {
 
 class _CookTierScreenState extends State<CookTierScreen> {
   int _tier = 1;
+  final _kitchenNameCtrl = TextEditingController();
+  final _aboutCtrl = TextEditingController();
+
+  bool _uploadingBanner = false;
+  bool _bannerUploaded = false;
+
+  List<String> _allCuisines = [];
+  final List<String> _selectedCuisines = [];
+  bool _loadingCuisines = true;
+
+  @override
+  void initState() {
+    super.initState();
+    final p = Provider.of<OnboardingProvider>(context, listen: false);
+    _tier = p.tier;
+    _kitchenNameCtrl.text = p.kitchenName;
+    _aboutCtrl.text = p.about;
+    _selectedCuisines.addAll(p.cuisines);
+    _bannerUploaded = p.bannerUrl.isNotEmpty;
+    _fetchCuisines();
+  }
+
+  @override
+  void dispose() {
+    _kitchenNameCtrl.dispose();
+    _aboutCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _fetchCuisines() async {
+    try {
+      final res = await ApiClient.instance.get(ApiEndpoints.getCuisines);
+      if (res.statusCode == 200 && res.data != null) {
+        final success = res.data['success'] as bool? ?? false;
+        final list = res.data['data'] as List?;
+        if (success && list != null) {
+          setState(() {
+            _allCuisines = list
+                .map((item) => (item['name'] ?? '').toString())
+                .where((n) => n.isNotEmpty)
+                .toList();
+            _loadingCuisines = false;
+          });
+          return;
+        }
+      }
+    } catch (e) {
+      AppLogger.e('Error fetching cuisines', e);
+    }
+    // Fallback cuisines if API fails
+    setState(() {
+      _allCuisines = [
+        'North Indian',
+        'South Indian',
+        'Chinese',
+        'Continental',
+        'Street Food',
+        'Biryani',
+        'Healthy & Diet',
+        'Desserts',
+      ];
+      _loadingCuisines = false;
+    });
+  }
+
+  Future<void> _pickAndUploadBanner() async {
+    final provider = Provider.of<OnboardingProvider>(context, listen: false);
+    final file = await ImagePickerService.pickFromSheet();
+    if (file == null) return;
+    setState(() => _uploadingBanner = true);
+    final ok = await provider.uploadDocument('banner', file);
+    if (mounted) {
+      setState(() {
+        _uploadingBanner = false;
+        _bannerUploaded = ok;
+      });
+      if (ok) ToastService.success('Banner image uploaded successfully.');
+    }
+  }
+
+  void _clearBanner() {
+    Provider.of<OnboardingProvider>(
+      context,
+      listen: false,
+    ).clearDocument('banner');
+    setState(() => _bannerUploaded = false);
+    ToastService.success('Banner image removed.');
+  }
 
   @override
   Widget build(BuildContext context) {
+    final provider = Provider.of<OnboardingProvider>(context);
+
     return OnboardingScaffold(
       step: 1,
-      totalSteps: 5,
+      totalSteps: 4,
       kicker: 'Welcome aboard',
       title: "Choose how\nyou'll sell",
-      subtitle: 'Most home cooks pick Tier 1 — it has the simplest onboarding.',
-      ctaLabel: _tier == 1
-          ? 'Continue as Home Chef'
-          : 'Continue as Verified Kitchen',
+      subtitle: 'Setup your kitchen tier and storefront profile branding.',
+      ctaLabel: 'Continue to Identity',
       onCta: () {
-        Provider.of<OnboardingProvider>(context, listen: false).setTier(_tier);
+        if (_kitchenNameCtrl.text.trim().isEmpty) {
+          ToastService.error('Kitchen name is required.');
+          return;
+        }
+        if (_aboutCtrl.text.trim().isEmpty) {
+          ToastService.error('About description is required.');
+          return;
+        }
+        if (_selectedCuisines.isEmpty) {
+          ToastService.error('Please select at least one cuisine.');
+          return;
+        }
+        if (provider.bannerUrl.isEmpty) {
+          ToastService.error('Please upload a storefront banner image.');
+          return;
+        }
+
+        provider.setTier(_tier);
+        provider.updateField(
+          kitchenName: _kitchenNameCtrl.text.trim(),
+          about: _aboutCtrl.text.trim(),
+          cuisines: _selectedCuisines,
+        );
         Navigator.pushNamed(context, RouteNames.cookIdentity);
       },
       body: [
-        _TierCard(
-          selected: _tier == 1,
-          recommended: true,
-          accent: AppColors.tier1,
-          accentSoft: AppColors.tier1Soft,
-          icon: '🏠',
-          kicker: 'TIER 1 · HOME CHEF',
-          title: 'For home cooks',
-          sub:
-              'Aadhaar, PAN, kitchen photos, bank account, FSSAI Basic — we help you register.',
-          callout: 'No FSSAI yet? We register you for ~₹100/yr.',
-          onTap: () => setState(() => _tier = 1),
+        Row(
+          children: [
+            Expanded(
+              child: InkWell(
+                onTap: () => setState(() => _tier = 1),
+                borderRadius: BorderRadius.circular(16.r),
+                child: Container(
+                  padding: EdgeInsets.symmetric(vertical: 14.h, horizontal: 10.w),
+                  decoration: BoxDecoration(
+                    color: _tier == 1 ? AppColors.primarySoft : AppColors.surface,
+                    border: Border.all(
+                      color: _tier == 1 ? AppColors.primary : AppColors.line,
+                      width: _tier == 1 ? 1.4 : 1,
+                    ),
+                    borderRadius: BorderRadius.circular(16.r),
+                  ),
+                  child: Column(
+                    children: [
+                      Text('🏠', style: TextStyle(fontSize: 22.sp)),
+                      SizedBox(height: 6.h),
+                      Text(
+                        'Home Chef',
+                        style: GoogleFonts.spaceGrotesk(
+                          fontSize: 12.5.sp,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.ink,
+                        ),
+                      ),
+                      SizedBox(height: 2.h),
+                      Text(
+                        'Tier 1',
+                        style: GoogleFonts.inter(
+                          fontSize: 10.5.sp,
+                          color: AppColors.muted,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            SizedBox(width: 10.w),
+            Expanded(
+              child: InkWell(
+                onTap: () => setState(() => _tier = 2),
+                borderRadius: BorderRadius.circular(16.r),
+                child: Container(
+                  padding: EdgeInsets.symmetric(vertical: 14.h, horizontal: 10.w),
+                  decoration: BoxDecoration(
+                    color: _tier == 2 ? AppColors.primarySoft : AppColors.surface,
+                    border: Border.all(
+                      color: _tier == 2 ? AppColors.primary : AppColors.line,
+                      width: _tier == 2 ? 1.4 : 1,
+                    ),
+                    borderRadius: BorderRadius.circular(16.r),
+                  ),
+                  child: Column(
+                    children: [
+                      Text('🏢', style: TextStyle(fontSize: 22.sp)),
+                      SizedBox(height: 6.h),
+                      Text(
+                        'Verified Kitchen',
+                        style: GoogleFonts.spaceGrotesk(
+                          fontSize: 12.5.sp,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.ink,
+                        ),
+                      ),
+                      SizedBox(height: 2.h),
+                      Text(
+                        'Tier 2',
+                        style: GoogleFonts.inter(
+                          fontSize: 10.5.sp,
+                          color: AppColors.muted,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
         SizedBox(height: 12.h),
-        _TierCard(
-          selected: _tier == 2,
-          recommended: false,
-          accent: AppColors.tier2,
-          accentSoft: AppColors.tier2Soft,
-          icon: '🏢',
-          kicker: 'TIER 2 · VERIFIED KITCHEN',
-          title: 'For licensed kitchens',
-          sub:
-              'FSSAI Licence + GST + business verification. Bigger order limits.',
-          onTap: () => setState(() => _tier = 2),
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          padding: EdgeInsets.all(12.w),
+          decoration: BoxDecoration(
+            color: _tier == 1 ? AppColors.tier1Soft : AppColors.tier2Soft,
+            borderRadius: BorderRadius.circular(14.r),
+            border: Border.all(
+              color: _tier == 1
+                  ? AppColors.tier1.withValues(alpha: .35)
+                  : AppColors.tier2.withValues(alpha: .35),
+            ),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('💡', style: TextStyle(fontSize: 14.sp)),
+              SizedBox(width: 8.w),
+              Expanded(
+                child: Text(
+                  _tier == 1
+                      ? 'Tier 1 Home Chef: For small-scale home cooks. Requires Aadhaar, PAN, bank account, and FSSAI Basic registration (~₹100/yr).'
+                      : 'Tier 2 Verified Kitchen: For licensed commercial setups. Requires FSSAI License, GST, and business details. Higher order limits.',
+                  style: GoogleFonts.inter(
+                    fontSize: 11.5.sp,
+                    color: _tier == 1 ? AppColors.tier1 : AppColors.tier2,
+                    height: 1.45,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
-        SizedBox(height: 16.h),
-        InfoCallout(
-          icon: Icons.verified_user_outlined,
-          text: 'You can upgrade your tier anytime from Settings.',
+
+        // SizedBox(height: 16.h),
+        // InfoCallout(
+        //   icon: Icons.verified_user_outlined,
+        //   text: 'You can upgrade your tier anytime from Settings.',
+        // ),
+        SizedBox(height: 26.h),
+        OnboardingSection(
+          title: 'Kitchen Details',
+          hint: 'This is visible to buyers on the platform.',
+          icon: Icons.storefront_outlined,
+        ),
+        PremiumField(
+          controller: _kitchenNameCtrl,
+          label: 'Kitchen name',
+          hint: "e.g. Sita's Homestyle Bites",
+          required: true,
+          textCapitalization: TextCapitalization.words,
+        ),
+        SizedBox(height: 10.h),
+        PremiumField(
+          controller: _aboutCtrl,
+          label: 'About / bio',
+          hint: "e.g. Cooking authentic food for over 10 years...",
+          maxLines: 2,
+          required: true,
+          textCapitalization: TextCapitalization.sentences,
+        ),
+
+        SizedBox(height: 26.h),
+        OnboardingSection(
+          title: 'Cuisines specialization',
+          hint: 'Select the cuisines you cook.',
+          icon: Icons.restaurant_menu_outlined,
+        ),
+        _loadingCuisines
+            ? const Center(child: CircularProgressIndicator())
+            : Wrap(
+                spacing: 8.w,
+                runSpacing: 8.h,
+                children: _allCuisines.map((cuisine) {
+                  final selected = _selectedCuisines.contains(cuisine);
+                  return FilterChip(
+                    label: Text(cuisine),
+                    selected: selected,
+                    onSelected: (val) {
+                      setState(() {
+                        if (val) {
+                          _selectedCuisines.add(cuisine);
+                        } else {
+                          _selectedCuisines.remove(cuisine);
+                        }
+                      });
+                    },
+                    selectedColor: AppColors.primarySoft,
+                    checkmarkColor: AppColors.primaryDark,
+                    labelStyle: GoogleFonts.inter(
+                      fontSize: 12.sp,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                      color: selected
+                          ? AppColors.primaryDark
+                          : AppColors.inkSoft,
+                    ),
+                    backgroundColor: AppColors.surface,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(99.r),
+                      side: BorderSide(
+                        color: selected ? AppColors.primary : AppColors.line,
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+
+        SizedBox(height: 26.h),
+        OnboardingSection(
+          title: 'Storefront banner image',
+          hint: 'Upload a beautiful image of your storefront or dishes.',
+          icon: Icons.image_outlined,
+        ),
+        UploadTile(
+          style: UploadStyle.hero,
+          title: 'Upload banner image',
+          helper: _uploadingBanner
+              ? 'Uploading...'
+              : 'Hold your phone sideways for landscape shots',
+          icon: Icons.cloud_upload_outlined,
+          uploaded: _bannerUploaded,
+          required: true,
+          imageUrl: provider.bannerUrl,
+          onTap: _pickAndUploadBanner,
+          onRemove: _clearBanner,
         ),
       ],
     );
   }
 }
 
-class _TierCard extends StatelessWidget {
-  const _TierCard({
-    required this.selected,
-    required this.recommended,
-    required this.accent,
-    required this.accentSoft,
-    required this.icon,
-    required this.kicker,
-    required this.title,
-    required this.sub,
-    required this.onTap,
-    this.callout,
-  });
-  final bool selected;
-  final bool recommended;
-  final Color accent;
-  final Color accentSoft;
-  final String icon;
-  final String kicker;
-  final String title;
-  final String sub;
-  final String? callout;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOut,
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20.r),
-        border: Border.all(
-          color: selected ? accent : AppColors.line,
-          width: selected ? 1.8 : 1,
-        ),
-        boxShadow: selected
-            ? [
-                BoxShadow(
-                  color: accent.withValues(alpha: .18),
-                  blurRadius: 18,
-                  offset: const Offset(0, 8),
-                ),
-              ]
-            : [
-                BoxShadow(
-                  color: AppColors.ink.withValues(alpha: .03),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(20.r),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(20.r),
-          onTap: onTap,
-          child: Padding(
-            padding: EdgeInsets.all(16.w),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 44.w,
-                      height: 44.w,
-                      decoration: BoxDecoration(
-                        color: accentSoft,
-                        borderRadius: BorderRadius.circular(12.r),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(icon, style: TextStyle(fontSize: 22.sp)),
-                    ),
-                    SizedBox(width: 12.w),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  kicker,
-                                  style: GoogleFonts.spaceGrotesk(
-                                    fontSize: 9.5.sp,
-                                    fontWeight: FontWeight.w800,
-                                    color: accent,
-                                    letterSpacing: 1,
-                                  ),
-                                ),
-                              ),
-                              if (recommended) ...[
-                                SizedBox(width: 6.w),
-                                Container(
-                                  padding: EdgeInsets.symmetric(
-                                      horizontal: 6.w, vertical: 2.h),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.primary,
-                                    borderRadius: BorderRadius.circular(6.r),
-                                  ),
-                                  child: Text(
-                                    'POPULAR',
-                                    style: GoogleFonts.spaceGrotesk(
-                                      fontSize: 8.5.sp,
-                                      fontWeight: FontWeight.w800,
-                                      color: Colors.white,
-                                      letterSpacing: .8,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                          SizedBox(height: 4.h),
-                          Text(
-                            title,
-                            style: GoogleFonts.spaceGrotesk(
-                              fontSize: 17.sp,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.ink,
-                              letterSpacing: -.3,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 220),
-                      width: 24.w,
-                      height: 24.w,
-                      decoration: BoxDecoration(
-                        color: selected ? accent : Colors.transparent,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: selected ? accent : AppColors.line,
-                          width: 2,
-                        ),
-                      ),
-                      child: selected
-                          ? const Icon(Icons.check_rounded,
-                              color: Colors.white, size: 14)
-                          : null,
-                    ),
-                  ],
-                ),
-                SizedBox(height: 12.h),
-                Text(
-                  sub,
-                  style: GoogleFonts.inter(
-                    fontSize: 12.5.sp,
-                    color: AppColors.inkSoft,
-                    height: 1.55,
-                  ),
-                ),
-                if (callout != null) ...[
-                  SizedBox(height: 12.h),
-                  Container(
-                    padding: EdgeInsets.all(11.w),
-                    decoration: BoxDecoration(
-                      color: accentSoft,
-                      borderRadius: BorderRadius.circular(12.r),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('✨', style: TextStyle(fontSize: 13.sp)),
-                        SizedBox(width: 8.w),
-                        Expanded(
-                          child: Text(
-                            callout!,
-                            style: GoogleFonts.inter(
-                              fontSize: 11.5.sp,
-                              color: accent,
-                              height: 1.45,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}

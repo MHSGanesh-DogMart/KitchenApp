@@ -55,6 +55,9 @@ class ApiClient {
         final token = await SecureStorage.instance.getToken();
         if (token != null && token.isNotEmpty) {
           options.headers['Authorization'] = 'Bearer $token';
+          AppLogger.i('Sending API Request to: ${options.path} with Token: Bearer $token');
+        } else {
+          AppLogger.d('Sending API Request to: ${options.path} (No Token)');
         }
         handler.next(options);
       },
